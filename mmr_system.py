@@ -25,7 +25,13 @@ POINT_DIFF_MULTIPLIER = 0.1
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEAMS_PATH = os.path.join(BASE_DIR, 'teams.json')
 MATCHES_PATH = os.path.join(BASE_DIR, 'matches.json')
-DB_PATH = os.path.join(BASE_DIR, 'mmr.db')
+# Allow production to place DB on a persistent path via env
+DB_PATH = os.getenv('MMR_DB_PATH', os.path.join(BASE_DIR, 'mmr.db'))
+# Ensure the parent directory exists for custom DB paths
+try:
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+except Exception:
+    pass
 DB_URL = f"sqlite:///{DB_PATH}"
 
 # ORM base

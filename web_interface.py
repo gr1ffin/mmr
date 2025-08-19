@@ -7,13 +7,25 @@ import uuid
 from mmr_system import MMRSystem, Team, Match
 import logging
 import requests
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Configure logging for the web server
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this in production
-ADMIN_PASSWORD = "stars"  # Admin password
+# Trust one reverse proxy (nginx) for forwarded headers
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+# Use environment variables for secrets in production
+app.secret_key = os.getenv('SECRET_KEY') or os.urandom(32)
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'stars')  # Admin password (override in production)
+
+# Production cookie/security defaults (can be overridden via env)
+app.config.update(
+    SESSION_COOKIE_SECURE=(os.getenv('SESSION_COOKIE_SECURE', 'true').lower() in ('1', 'true', 'yes')),
+    SESSION_COOKIE_SAMESITE=os.getenv('SESSION_COOKIE_SAMESITE', 'Lax'),
+    SESSION_COOKIE_HTTPONLY=True,
+    PREFERRED_URL_SCHEME=os.getenv('PREFERRED_URL_SCHEME', 'https'),
+)
 
 # Discord webhook URL from environment variable (no hard-coded secrets)
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
@@ -499,7 +511,7 @@ def backup_data():
             os.makedirs(backup_dir)
 
         # Prefer backing up the SQLite database if present
-        db_path = os.path.join(os.path.dirname(__file__), 'mmr.db')
+        db_path = os.getenv('MMR_DB_PATH') or os.path.join(os.path.dirname(__file__), 'mmr.db')
         if os.path.exists(db_path):
             import shutil
             shutil.copy2(db_path, f"{backup_dir}/mmr_backup_{timestamp}.db")
@@ -533,7 +545,7 @@ def restore_data():
         db_backup = next((f for f in files if f.startswith('mmr_backup_') and f.endswith('.db')), None)
         import shutil
         if db_backup:
-            db_path = os.path.join(os.path.dirname(__file__), 'mmr.db')
+            db_path = os.getenv('MMR_DB_PATH') or os.path.join(os.path.dirname(__file__), 'mmr.db')
             shutil.copy2(os.path.join(backup_dir, db_backup), db_path)
         else:
             # Fallback to JSON backups
@@ -928,4 +940,8 @@ def admin_import_team():
     return redirect(url_for('admin_panel'))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # In production use gunicorn. This block is for local/dev usage.
+    debug = os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    port = int(os.getenv('PORT', 5001))
+    host = os.getenv('HOST', '0.0.0.0')
+    app.run(debug=debug, host=host, port=port)
