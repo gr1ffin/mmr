@@ -57,6 +57,9 @@
                     <a href="{{ url_for('teams') }}" class="btn btn-outline-info">
                         <i class="fas fa-eye me-2"></i>View All Teams
                     </a>
+                    <button class="btn btn-outline-secondary btn-lg" data-bs-toggle="modal" data-bs-target="#importTeamModal">
+                        <i class="fas fa-file-import me-2"></i>Import Team JSON
+                    </button>
                 </div>
             </div>
         </div>
@@ -181,6 +184,40 @@
     </div>
 </div>
 
+<!-- Database Status -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-secondary">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-database me-2"></i>Database Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><strong>Backend:</strong> {{ db_status.backend if db_status else 'unknown' }}</li>
+                            <li class="list-group-item"><strong>DB Path:</strong> {{ db_status.db_path or 'N/A' }}</li>
+                            <li class="list-group-item"><strong>DB Size (bytes):</strong> {{ db_status.db_size_bytes or 'N/A' }}</li>
+                            <li class="list-group-item"><strong>Teams (in memory):</strong> {{ db_status.teams_count if db_status else teams|length }}</li>
+                            <li class="list-group-item"><strong>Matches (in memory):</strong> {{ db_status.matches_count if db_status else matches|length }}</li>
+                            <li class="list-group-item"><strong>Legacy JSON present:</strong> {{ db_status.legacy_json_present if db_status else 'False' }}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-center justify-content-center">
+                        <form method="POST" action="{{ url_for('admin_remigrate') }}" onsubmit="return confirm('This will replace DB contents with data from legacy JSON files if present. Continue?');">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-exchange-alt me-2"></i>Re-import from Legacy JSON
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Manage Matches -->
 <div class="row">
     <div class="col-12">
@@ -212,13 +249,7 @@
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-12 text-center">
-        <form action="{{ url_for('simulate_match') }}" method="post">
-            <button type="submit" class="btn btn-warning">Simulate Match Log</button>
-        </form>
-    </div>
-</div>
+<!-- Removed Simulate Match Log button section -->
 
 <div class="row mt-4">
     <div class="col-12">
@@ -248,6 +279,33 @@
     <div class="col-12 text-center">
         <button class="btn btn-danger" id="resetDataButton">Reset All Data</button>
     </div>
+</div>
+
+<!-- Import Team Modal -->
+<div class="modal fade" id="importTeamModal" tabindex="-1" aria-labelledby="importTeamModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="importTeamModalLabel"><i class="fas fa-file-import me-2"></i>Import Team from JSON</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{{ url_for('admin_import_team') }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="teamJsonTextarea" class="form-label">Paste team JSON</label>
+            <textarea id="teamJsonTextarea" name="team_json" class="form-control" rows="12" placeholder='{"name":"Team X","mmr":1000,"active":true,"roster":[{"name":"Player 1","role":"DPS"}]}' required></textarea>
+            <div class="form-text">
+              Accepts a single team object, an array of team objects, or {"teams": [ ... ]}. Existing team names are skipped.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <script>

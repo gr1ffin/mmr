@@ -15,8 +15,8 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this in production
 ADMIN_PASSWORD = "stars"  # Admin password
 
-# Discord webhook URL should be provided via environment variable only (no hard-coded secrets)
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1407186075209830441/aIiJZZaAkTw_dDojhbCE1W_g4E8se9Ie-RQ-ohwXv2mnIErQW0MNYeE4Pg8FSe7z3kMn"
+# Discord webhook URL from environment variable (no hard-coded secrets)
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 # Helper: send a plain text message to Discord via webhook (best-effort)
 def _post_discord_webhook_message(content: str) -> None:
@@ -100,6 +100,31 @@ INACTIVITY_PENALTY = config["INACTIVITY_PENALTY"]
 MARGIN_BONUS = {tuple(map(int, k.replace(',', '_').split('_'))): v for k, v in config["MARGIN_BONUS"].items()}
 POINT_DIFF_MULTIPLIER = config["POINT_DIFF_MULTIPLIER"]
 
+# After initializing MMRSystem, hydrate settings from DB so runtime reflects persisted config
+try:
+    db_cfg = mmr_system.get_mmr_config() or {}
+    # Merge DB config over file/defaults
+    config.update(db_cfg)
+    BASE_MMR = config["BASE_MMR"]
+    PLACEMENT_MATCHES = config["PLACEMENT_MATCHES"]
+    K_FACTOR = config["K_FACTOR"]
+    CHALLENGE_MULTIPLIER = config["CHALLENGE_MULTIPLIER"]
+    INACTIVITY_PENALTY = config["INACTIVITY_PENALTY"]
+    POINT_DIFF_MULTIPLIER = config["POINT_DIFF_MULTIPLIER"]
+    MARGIN_BONUS = { (3,0): config["MARGIN_BONUS"].get("3_0", 5),
+                     (3,1): config["MARGIN_BONUS"].get("3_1", 3),
+                     (3,2): config["MARGIN_BONUS"].get("3_2", 1) }
+    # Apply to running system
+    mmr_system.update_settings(
+        k_factor=K_FACTOR,
+        inactivity_penalty=INACTIVITY_PENALTY,
+        point_diff_multiplier=POINT_DIFF_MULTIPLIER,
+        margin_bonus=MARGIN_BONUS,
+    )
+    mmr_system.placement_matches = PLACEMENT_MATCHES
+except Exception as e:
+    logging.warning(f"Failed to hydrate settings from DB: {e}")
+
 # Admin authentication decorator
 def admin_required(f):
     def decorated_function(*args, **kwargs):
@@ -116,7 +141,18 @@ def index():
     current_week = mmr_system.current_week
     recent_matches = sorted(mmr_system.matches, key=lambda x: x.week, reverse=True)[:10]
     week_matches = [m for m in mmr_system.matches if m.week == current_week - 1]
-    return render_template('index.html', teams=leaderboard, leaderboard=leaderboard, current_week=current_week, recent_matches=recent_matches, week_matches=week_matches, matches=mmr_system.matches)
+    # Pull full dashboard title from DB (empty string falls back in template)
+    dashboard_title = mmr_system.get_setting('dashboard_header')
+    return render_template(
+        'index.html',
+        teams=leaderboard,
+        leaderboard=leaderboard,
+        current_week=current_week,
+        recent_matches=recent_matches,
+        week_matches=week_matches,
+        matches=mmr_system.matches,
+        dashboard_title=dashboard_title,
+    )
 
 @app.route('/record_match', methods=['POST'])
 def record_match():
@@ -223,7 +259,8 @@ def admin_login():
 def admin_panel():
     """Admin panel dashboard."""
     sorted_teams = sorted(mmr_system.teams, key=lambda x: x.mmr, reverse=True)
-    return render_template('admin_panel.html', teams=sorted_teams, matches=mmr_system.matches, current_week=mmr_system.current_week)
+    db_status = mmr_system.get_db_status()
+    return render_template('admin_panel.html', teams=sorted_teams, matches=mmr_system.matches, current_week=mmr_system.current_week, db_status=db_status)
 
 @app.route('/manage_teams')
 @admin_required
@@ -446,12 +483,14 @@ def system_settings():
         except ValueError:
             flash("Invalid input. Please enter valid numbers.", 'error')
         return redirect(url_for('admin_panel'))
-    return render_template('system_settings.html', k_factor=K_FACTOR, inactivity_penalty=INACTIVITY_PENALTY)
+    # Ensure template has access to full config including margin bonuses, pulling from DB
+    cfg = mmr_system.get_mmr_config()
+    return render_template('system_settings.html', config=cfg)
 
 @app.route('/backup_data')
 @admin_required
 def backup_data():
-    """Backup system data."""
+    """Backup system data (SQLite DB preferred)."""
     try:
         # Create backup with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -459,13 +498,22 @@ def backup_data():
         if not os.path.exists(backup_dir):
             os.makedirs(backup_dir)
 
-        # Copy current data files
-        import shutil
-        shutil.copy2("teams.json", f"{backup_dir}/teams_backup_{timestamp}.json")
-        shutil.copy2("matches.json", f"{backup_dir}/matches_backup_{timestamp}.json")
+        # Prefer backing up the SQLite database if present
+        db_path = os.path.join(os.path.dirname(__file__), 'mmr.db')
+        if os.path.exists(db_path):
+            import shutil
+            shutil.copy2(db_path, f"{backup_dir}/mmr_backup_{timestamp}.db")
+        else:
+            # Fallback: copy current JSON files
+            import shutil
+            if os.path.exists("teams.json"):
+                shutil.copy2("teams.json", f"{backup_dir}/teams_backup_{timestamp}.json")
+            if os.path.exists("matches.json"):
+                shutil.copy2("matches.json", f"{backup_dir}/matches_backup_{timestamp}.json")
 
         flash(f'Data backed up successfully! Backup created at {timestamp}', 'success')
     except Exception as e:
+        logging.exception("Backup failed")
         flash(f'Backup failed: {str(e)}', 'error')
 
     return redirect(url_for('admin_panel'))
@@ -473,32 +521,36 @@ def backup_data():
 @app.route('/restore_data')
 @admin_required
 def restore_data():
-    """Restore system data from the latest backup."""
+    """Restore system data from the latest backup (SQLite DB preferred)."""
     try:
         backup_dir = "backups"
         if not os.path.exists(backup_dir):
             flash('No backup directory found.', 'error')
             return redirect(url_for('admin_panel'))
 
-        # Find the latest backup files
-        backups = sorted(os.listdir(backup_dir), reverse=True)
-        teams_backup = next((f for f in backups if f.startswith('teams_backup_')), None)
-        matches_backup = next((f for f in backups if f.startswith('matches_backup_')), None)
-
-        if not teams_backup or not matches_backup:
-            flash('No valid backup files found.', 'error')
-            return redirect(url_for('admin_panel'))
-
-        # Restore the backup files
+        files = sorted(os.listdir(backup_dir), reverse=True)
+        # Prefer DB backups
+        db_backup = next((f for f in files if f.startswith('mmr_backup_') and f.endswith('.db')), None)
         import shutil
-        shutil.copy2(f"{backup_dir}/{teams_backup}", "teams.json")
-        shutil.copy2(f"{backup_dir}/{matches_backup}", "matches.json")
+        if db_backup:
+            db_path = os.path.join(os.path.dirname(__file__), 'mmr.db')
+            shutil.copy2(os.path.join(backup_dir, db_backup), db_path)
+        else:
+            # Fallback to JSON backups
+            teams_backup = next((f for f in files if f.startswith('teams_backup_')), None)
+            matches_backup = next((f for f in files if f.startswith('matches_backup_')), None)
+            if not teams_backup or not matches_backup:
+                flash('No valid backup files found.', 'error')
+                return redirect(url_for('admin_panel'))
+            shutil.copy2(f"{backup_dir}/{teams_backup}", "teams.json")
+            shutil.copy2(f"{backup_dir}/{matches_backup}", "matches.json")
 
         # Reload the data into the system
         mmr_system.load_data()
 
         flash('Data restored successfully from the latest backup.', 'success')
     except Exception as e:
+        logging.exception("Restore failed")
         flash(f'Restore failed: {str(e)}', 'error')
 
     return redirect(url_for('admin_panel'))
@@ -560,7 +612,7 @@ def export_data():
 @app.route('/admin/recalculate_mmr', methods=['POST'])
 @admin_required
 def recalculate_mmr():
-    mmr_system.load_data()  # reload latest JSON edits from disk
+    mmr_system.load_data()  # reload latest data from DB
     mmr_system.recalculate_all_mmr()
     flash('Recalculated MMR from complete match history.', 'success')
     return redirect(request.referrer or url_for('leaderboard'))
@@ -695,6 +747,21 @@ def update_system_settings():
         with open(CONFIG_FILE, 'w') as f:
             json.dump(cfg, f, indent=2)
 
+        # Also persist to DB (authoritative), ensuring string keys for JSON
+        try:
+            mmr_system.update_mmr_config_in_db(
+                base_mmr=base_mmr,
+                placement_matches=placement_matches,
+                k_factor=k_factor,
+                challenge_multiplier=challenge_multiplier,
+                inactivity_penalty=inactivity_penalty,
+                margin_bonus={"3_0": margin_3_0, "3_1": margin_3_1, "3_2": margin_3_2},
+                point_diff_multiplier=point_diff_multiplier,
+            )
+        except Exception:
+            # Non-fatal: continue with in-memory update and file save
+            pass
+
         # Update in-memory config and globals so routes use latest values
         config = cfg
         BASE_MMR = config["BASE_MMR"]
@@ -741,6 +808,124 @@ def reset_data():
     except Exception as e:
         logging.exception('Failed to reset data')
         return (str(e), 500)
+
+@app.route('/admin/db_status')
+@admin_required
+def admin_db_status():
+    try:
+        return jsonify(mmr_system.get_db_status())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/remigrate', methods=['POST'])
+@admin_required
+def admin_remigrate():
+    ok = mmr_system.remigrate_from_json()
+    if ok:
+        flash('Re-imported data from legacy JSON and refreshed in-memory state.', 'success')
+    else:
+        flash('Re-import failed. Ensure legacy teams.json and matches.json exist and are valid.', 'error')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/import_team', methods=['POST'])
+@admin_required
+def admin_import_team():
+    """Import a new team from pasted JSON in admin panel modal."""
+    raw = request.form.get('team_json', '').strip()
+    if not raw:
+        flash('No JSON provided.', 'error')
+        return redirect(url_for('admin_panel'))
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        flash(f'Invalid JSON: {e}', 'error')
+        return redirect(url_for('admin_panel'))
+
+    # Support single object or list of objects but only add new teams
+    if isinstance(data, dict) and 'teams' in data and isinstance(data['teams'], list):
+        teams_payload = data['teams']
+    elif isinstance(data, list):
+        teams_payload = data
+    elif isinstance(data, dict):
+        teams_payload = [data]
+    else:
+        flash('JSON must be a team object or list of team objects.', 'error')
+        return redirect(url_for('admin_panel'))
+
+    added = 0
+    skipped = 0
+    for t in teams_payload:
+        if not isinstance(t, dict):
+            skipped += 1
+            continue
+        name = (t.get('name') or '').strip()
+        if not name:
+            skipped += 1
+            continue
+        # Check duplicate by case-insensitive name
+        if any(existing.name.lower() == name.lower() for existing in mmr_system.teams):
+            skipped += 1
+            continue
+        # Build Team object
+        try:
+            mmr_val = int(t.get('mmr', BASE_MMR))
+        except Exception:
+            mmr_val = BASE_MMR
+        new_team = Team(name=name, mmr=mmr_val)
+        new_team.active = bool(t.get('active', True))
+        # Matches/stats
+        try:
+            new_team.matches_played = int(t.get('matches_played', 0))
+        except Exception:
+            new_team.matches_played = 0
+        try:
+            new_team.wins = int(t.get('wins', 0))
+        except Exception:
+            new_team.wins = 0
+        try:
+            new_team.losses = int(t.get('losses', 0))
+        except Exception:
+            new_team.losses = 0
+        # History
+        hist = t.get('history')
+        new_team.history = hist if isinstance(hist, list) else []
+        # Provisional flag respects placement threshold
+        prov = t.get('provisional')
+        if prov is None:
+            new_team.provisional = new_team.matches_played < mmr_system.placement_matches
+        else:
+            new_team.provisional = bool(prov)
+        # Visuals and roster
+        new_team.logo = t.get('logo') or ''
+        new_team.hexcolor = t.get('hexcolor') or '#374151'
+        roster = t.get('roster') or []
+        if isinstance(roster, list):
+            cleaned = []
+            for p in roster:
+                if not isinstance(p, dict):
+                    continue
+                n = (p.get('name') or '').strip()
+                if not n:
+                    continue
+                cleaned.append({
+                    'name': n,
+                    'role': (p.get('role') or '').strip(),
+                    'matches_played': int(p.get('matches_played') or 0)
+                })
+            new_team.roster = cleaned
+        else:
+            new_team.roster = []
+
+        mmr_system.teams.append(new_team)
+        added += 1
+
+    if added:
+        mmr_system.save_data()
+        flash(f'Imported {added} team(s). Skipped {skipped}.', 'success')
+    else:
+        flash('No new teams were imported. Check for duplicates or invalid JSON format.', 'warning')
+
+    return redirect(url_for('admin_panel'))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
