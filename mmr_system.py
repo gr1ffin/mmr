@@ -17,14 +17,23 @@ INACTIVITY_PENALTY = 10
 MARGIN_BONUS = {(3, 0): 5, (3, 1): 3, (3, 2): 1}
 POINT_DIFF_MULTIPLIER = 0.1
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEAMS_PATH = os.path.join(BASE_DIR, 'teams.json')
+MATCHES_PATH = os.path.join(BASE_DIR, 'matches.json')
+
 class Team:
     def __init__(self, name: str, mmr: int = BASE_MMR):
         self.name = name
-        self.mmr = mmr
+        # Coerce mmr to int safely
+        try:
+            self.mmr = int(mmr)
+        except (ValueError, TypeError):
+            self.mmr = BASE_MMR
         self.matches_played = 0
         self.history = []
         self.wins = 0
         self.losses = 0
+        self.active = True
 
     def to_dict(self) -> Dict:
         return {
@@ -33,16 +42,18 @@ class Team:
             'matches_played': self.matches_played,
             'history': self.history,
             'wins': self.wins,
-            'losses': self.losses
+            'losses': self.losses,
+            'active': self.active
         }
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'Team':
-        team = cls(data['name'], data['mmr'])
-        team.matches_played = data['matches_played']
-        team.history = data['history']
-        team.wins = data['wins']
-        team.losses = data['losses']
+        team = cls(data['name'], data.get('mmr', BASE_MMR))
+        team.matches_played = data.get('matches_played', 0)
+        team.history = data.get('history', [])
+        team.wins = data.get('wins', 0)
+        team.losses = data.get('losses', 0)
+        team.active = data.get('active', True)
         return team
 
 class Match:
@@ -95,23 +106,23 @@ class MMRSystem:
         self._save_matches()
 
     def _load_teams(self) -> List[Team]:
-        if not os.path.exists('teams.json'):
+        if not os.path.exists(TEAMS_PATH):
             return []
-        with open('teams.json', 'r') as f:
+        with open(TEAMS_PATH, 'r') as f:
             return [Team.from_dict(data) for data in json.load(f)]
 
     def _save_teams(self):
-        with open('teams.json', 'w') as f:
+        with open(TEAMS_PATH, 'w') as f:
             json.dump([team.to_dict() for team in self.teams], f, indent=2)
 
     def _load_matches(self) -> List[Match]:
-        if not os.path.exists('matches.json'):
+        if not os.path.exists(MATCHES_PATH):
             return []
-        with open('matches.json', 'r') as f:
+        with open(MATCHES_PATH, 'r') as f:
             return [Match.from_dict(data) for data in json.load(f)]
 
     def _save_matches(self):
-        with open('matches.json', 'w') as f:
+        with open(MATCHES_PATH, 'w') as f:
             json.dump([match.to_dict() for match in self.matches], f, indent=2)
 
     def update_mmr(self, winner: Team, loser: Team, score: Tuple[int, int], set_scores: List[str]):
@@ -151,4 +162,38 @@ class MMRSystem:
         self.save_data()
 
     def get_leaderboard(self) -> List[Team]:
-        return sorted(self.teams, key=lambda t: t.mmr, reverse=True)
+        """Return a sorted list of teams by MMR in descending order."""
+        return sorted(self.teams, key=lambda t: t.mmr, reverse=True) if self.teams else []
+
+    def generate_weekly_matches(self, matches_per_team: int = 1) -> List['Match']:
+        """Generate matches for the current week so each team gets matches_per_team matches if possible."""
+        import random
+        teams = self.teams[:]
+        if len(teams) < 2:
+            logging.warning("Not enough teams to generate matches")
+            return []
+
+        counts = {t.name: 0 for t in teams}
+        matches_created: List[Match] = []
+
+        # Attempt to generate pairings until all counts reach the target or no progress
+        while any(count < matches_per_team for count in counts.values()):
+            random.shuffle(teams)
+            added_this_round = 0
+            for i in range(0, len(teams) - 1, 2):
+                a = teams[i]
+                b = teams[i + 1]
+                if counts[a.name] < matches_per_team and counts[b.name] < matches_per_team:
+                    m = Match(a.name, b.name, self.current_week)
+                    matches_created.append(m)
+                    counts[a.name] += 1
+                    counts[b.name] += 1
+                    added_this_round += 1
+            if added_this_round == 0:
+                # Cannot satisfy further constraints; break to avoid infinite loop
+                break
+
+        if matches_created:
+            self.matches.extend(matches_created)
+            self.save_data()
+        return matches_created

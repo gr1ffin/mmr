@@ -1,80 +1,69 @@
 [
   {
     "name": "Kogarashi",
-    "mmr": "TBD",
-    "matches_played": 0,
-    "active": true,
-    "history": [],
-    "roster": [],
-    "wins": 0,
+    "mmr": 1019,
+    "matches_played": 2,
+    "history": [
+      "Won 3-0 vs XIII",
+      "Won 3-0 vs ENHYPEN"
+    ],
+    "wins": 2,
     "losses": 0,
-    "win_rate": 0.0,
-    "avg_points": 0.0,
-    "rank": null
+    "active": true
   },
   {
     "name": "Buldak",
-    "mmr": "TBD",
-    "matches_played": 0,
-    "active": true,
-    "history": [],
-    "roster": [],
+    "mmr": 980,
+    "matches_played": 2,
+    "history": [
+      "Lost 0-3 vs Dawnwalkers",
+      "Lost 1-3 vs Dawnwalkers"
+    ],
     "wins": 0,
-    "losses": 1,
-    "win_rate": 0.0,
-    "avg_points": 0.0,
-    "rank": null
+    "losses": 2,
+    "active": true
   },
   {
     "name": "XIII",
-    "mmr": "TBD",
-    "matches_played": 0,
-    "active": true,
-    "history": [],
-    "roster": [],
+    "mmr": 990,
+    "matches_played": 1,
+    "history": [
+      "Lost 0-3 vs Kogarashi"
+    ],
     "wins": 0,
-    "losses": 0,
-    "win_rate": 0.0,
-    "avg_points": 0.0,
-    "rank": null
+    "losses": 1,
+    "active": true
   },
   {
     "name": "Dawnwalkers",
-    "mmr": "TBD",
-    "matches_played": 0,
-    "active": true,
-    "history": [],
-    "roster": [],
-    "wins": 0,
-    "losses": 1,
-    "win_rate": 0.0,
-    "avg_points": 0.0,
-    "rank": null
+    "mmr": 1019,
+    "matches_played": 2,
+    "history": [
+      "Won 3-0 vs Buldak",
+      "Won 3-1 vs Buldak"
+    ],
+    "wins": 2,
+    "losses": 0,
+    "active": true
   },
   {
     "name": "Tekkai",
-    "mmr": "TBD",
+    "mmr": 1000,
     "matches_played": 0,
-    "active": true,
     "history": [],
-    "roster": [],
-    "wins": 1,
+    "wins": 0,
     "losses": 0,
-    "win_rate": 0.0,
-    "avg_points": 0.0,
-    "rank": null
+    "active": true
   },
   {
     "name": "ENHYPEN",
-    "mmr": "TBD",
-    "matches_played": 0,
-    "active": true,
-    "history": [],
-    "roster": [],
-    "wins": 1,
-    "losses": 0,
-    "win_rate": 0.0,
-    "avg_points": 0.0,
-    "rank": null
+    "mmr": 990,
+    "matches_played": 1,
+    "history": [
+      "Lost 0-3 vs Kogarashi"
+    ],
+    "wins": 0,
+    "losses": 1,
+    "active": true
   }
 ]
