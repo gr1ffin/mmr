@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Matches - MMR Competitive Ladder{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h3 class="mb-0">
+                        <i class="fas fa-gamepad me-2"></i>All Matches
+                    </h3>
+                </div>
+                <div class="btn-group" role="group">
+                    <button id="refreshMatchesBtn" class="btn btn-success" onclick="refreshMatches()">
+                        <i class="fas fa-sync-alt me-2"></i>Refresh
+                    </button>
+                    <a href="{{ url_for('admin_login') }}" class="btn btn-primary">
+                        <i class="fas fa-lock me-2"></i>Admin Panel
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if matches_by_week %}
+                    {% for week in sorted_weeks %}
+                    <div class="mb-4">
+                        <h4 class="border-bottom pb-2">
+                            <i class="fas fa-calendar-week me-2"></i>Week {{ week }}
+                        </h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Match ID</th>
+                                        <th>Team A</th>
+                                        <th>Sets Won</th>
+                                        <th>Team B</th>
+                                        <th>Set Scores</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for match in matches_by_week[week] %}
+                                    <tr>
+                                        <td><code>{{ match.match_id }}</code></td>
+                                        <td>
+                                            <strong>{{ match.team_a }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if match.score %}
+                                                <span class="badge bg-success fs-6">
+                                                    {{ match.score[0] }}-{{ match.score[1] }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">vs</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <strong>{{ match.team_b }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if match.set_scores %}
+                                                {% for set_score in match.set_scores %}
+                                                    <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
+                                                {% endfor %}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{ 'success' if match.completed else 'warning' }}">
+                                                {{ 'Completed' if match.completed else 'Pending' }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <a href="{{ url_for('match_detail', match_id=match.match_id) }}" 
+                                                   class="btn btn-sm btn-outline-primary" 
+                                                   title="View Match Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                {% if not match.completed %}
+                                                <a href="{{ url_for('input_result', match_id=match.match_id) }}" 
+                                                   class="btn btn-sm btn-success" 
+                                                   title="Input Match Result">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                {% endif %}
+                                                {% if session.get('is_admin') and match.is_completed %}
+                                                <a href="{{ url_for('input_result', match_id=match.match_id) }}" class="btn btn-sm btn-warning">
+                                                    <i class="fas fa-edit"></i> Edit
+                                                </a>
+                                                {% endif %}
+                                                <form method="POST" action="{{ url_for('delete_match', match_id=match.match_id) }}">
+                                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-gamepad fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">No matches found</h5>
+                    <p class="text-muted">Generate some matches to get started!</p>
+                    <a href="{{ url_for('admin_login') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Generate Matches
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Match Statistics -->
+{% if matches_by_week %}
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-gamepad fa-2x text-primary mb-2"></i>
+                <h4>{{ matches|length }}</h4>
+                <p class="text-muted mb-0">Total Matches</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                <h4>{{ matches|selectattr('completed')|list|length }}</h4>
+                <p class="text-muted mb-0">Completed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                <h4>{{ matches|rejectattr('completed')|list|length }}</h4>
+                <p class="text-muted mb-0">Pending</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-calendar-week fa-2x text-info mb-2"></i>
+                <h4>{{ sorted_weeks|length }}</h4>
+                <p class="text-muted mb-0">Weeks</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function refreshMatches() {
+    // Show loading state
+    const btn = document.getElementById('refreshMatchesBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
+    btn.disabled = true;
+    
+    // Make AJAX request to refresh endpoint
+    fetch('/admin/refresh_data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            btn.innerHTML = '<i class="fas fa-check me-2"></i>Refreshed!';
+            btn.className = 'btn btn-success';
+            
+            // Reload the page after a short delay to show updated data
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            // Show error message
+            btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
+            btn.className = 'btn btn-danger';
+        }
+    })
+    .catch(error => {
+        // Show error message
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
+        btn.className = 'btn btn-danger';
+    })
+    .finally(() => {
+        // Reset button after a delay
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.className = 'btn btn-success';
+            btn.disabled = false;
+        }, 3000);
+    });
+}
+</script>
+{% endblock %}

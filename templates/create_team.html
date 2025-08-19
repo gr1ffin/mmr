@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Create New Team - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card bg-gradient text-white" style="background: linear-gradient(45deg, #28a745 0%, #20c997 100%);">
+            <div class="card-body text-center">
+                <h2 class="card-title mb-3">
+                    <i class="fas fa-plus-circle me-2"></i>Create New Team
+                </h2>
+                <p class="mb-0">Add a new team to the competitive ladder</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-edit me-2"></i>Team Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('create_team') }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="team_name" class="form-label">
+                                    <strong>Team Name</strong>
+                                </label>
+                                <input type="text" 
+                                       class="form-control form-control-lg" 
+                                       id="team_name" 
+                                       name="team_name" 
+                                       required 
+                                       placeholder="Enter team name">
+                                <div class="form-text">Choose a unique team name</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="initial_mmr" class="form-label">
+                                    <strong>Initial MMR</strong>
+                                </label>
+                                <input type="number" 
+                                       class="form-control form-control-lg" 
+                                       id="initial_mmr" 
+                                       name="initial_mmr" 
+                                       value="1000" 
+                                       min="0" 
+                                       required>
+                                <div class="form-text">Starting MMR rating (default: 1000)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="team_active" name="active" checked>
+                            <label class="form-check-label" for="team_active">
+                                <strong>Team is Active</strong>
+                            </label>
+                        </div>
+                        <div class="form-text">Active teams can participate in matches</div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Initial Roster -->
+                    <h6 class="mb-3">
+                        <i class="fas fa-users me-2"></i>Initial Roster
+                    </h6>
+                    <div id="roster-container">
+                        <div class="row roster-player mb-3">
+                            <div class="col-md-5">
+                                <input type="text" 
+                                       class="form-control" 
+                                       name="player_names[]" 
+                                       placeholder="Player name" 
+                                       required>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" 
+                                       class="form-control" 
+                                       name="player_roles[]" 
+                                       placeholder="Role (optional)">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-outline-danger btn-sm remove-player" 
+                                        onclick="removePlayer(this)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row roster-player mb-3">
+                            <div class="col-md-5">
+                                <input type="text" 
+                                       class="form-control" 
+                                       name="player_names[]" 
+                                       placeholder="Player name" 
+                                       required>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" 
+                                       class="form-control" 
+                                       name="player_roles[]" 
+                                       placeholder="Role (optional)">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-outline-danger btn-sm remove-player" 
+                                        onclick="removePlayer(this)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addPlayer()">
+                            <i class="fas fa-plus me-1"></i>Add Another Player
+                        </button>
+                        <small class="text-muted ms-2">Teams need at least 2 players</small>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Form Actions -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('manage_teams') }}" class="btn btn-secondary btn-lg me-md-2">
+                            <i class="fas fa-arrow-left me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-save me-2"></i>Create Team
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Help Section -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-question-circle me-2"></i>Creating Teams
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Team Requirements:</h6>
+                        <ul class="small">
+                            <li>Unique team name</li>
+                            <li>Minimum 2 players</li>
+                            <li>Initial MMR (default: 1000)</li>
+                            <li>Active status</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Player Information:</h6>
+                        <ul class="small">
+                            <li>Player names are required</li>
+                            <li>Roles are optional</li>
+                            <li>Can add/remove players</li>
+                            <li>Roster can be edited later</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3">
+                    <strong>Note:</strong> New teams will start at the bottom of the leaderboard and can climb through matches.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addPlayer() {
+    const container = document.getElementById('roster-container');
+    const playerDiv = document.createElement('div');
+    playerDiv.className = 'row roster-player mb-3';
+    playerDiv.innerHTML = `
+        <div class="col-md-5">
+            <input type="text" class="form-control" name="player_names[]" placeholder="Player name" required>
+        </div>
+        <div class="col-md-5">
+            <input type="text" class="form-control" name="player_roles[]" placeholder="Role (optional)">
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-outline-danger btn-sm remove-player" onclick="removePlayer(this)">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(playerDiv);
+}
+
+function removePlayer(button) {
+    const playerDiv = button.closest('.roster-player');
+    const container = document.getElementById('roster-container');
+    
+    // Don't remove if only 2 players left
+    if (container.children.length > 2) {
+        playerDiv.remove();
+    } else {
+        alert('Teams need at least 2 players');
+    }
+}
+
+// Form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const playerInputs = document.querySelectorAll('input[name="player_names[]"]');
+    const filledPlayers = Array.from(playerInputs).filter(input => input.value.trim() !== '');
+    
+    if (filledPlayers.length < 2) {
+        e.preventDefault();
+        alert('Teams need at least 2 players');
+        return false;
+    }
+    
+    // Check for duplicate player names
+    const playerNames = filledPlayers.map(input => input.value.trim().toLowerCase());
+    const uniqueNames = new Set(playerNames);
+    
+    if (playerNames.length !== uniqueNames.size) {
+        e.preventDefault();
+        alert('Player names must be unique within the team');
+        return false;
+    }
+});
+</script>
+{% endblock %}

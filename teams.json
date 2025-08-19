@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Kogarashi",
+    "mmr": "TBD",
+    "matches_played": 0,
+    "active": true,
+    "history": [],
+    "roster": [],
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "avg_points": 0.0,
+    "rank": null
+  },
+  {
+    "name": "Buldak",
+    "mmr": "TBD",
+    "matches_played": 0,
+    "active": true,
+    "history": [],
+    "roster": [],
+    "wins": 0,
+    "losses": 1,
+    "win_rate": 0.0,
+    "avg_points": 0.0,
+    "rank": null
+  },
+  {
+    "name": "XIII",
+    "mmr": "TBD",
+    "matches_played": 0,
+    "active": true,
+    "history": [],
+    "roster": [],
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "avg_points": 0.0,
+    "rank": null
+  },
+  {
+    "name": "Dawnwalkers",
+    "mmr": "TBD",
+    "matches_played": 0,
+    "active": true,
+    "history": [],
+    "roster": [],
+    "wins": 0,
+    "losses": 1,
+    "win_rate": 0.0,
+    "avg_points": 0.0,
+    "rank": null
+  },
+  {
+    "name": "Tekkai",
+    "mmr": "TBD",
+    "matches_played": 0,
+    "active": true,
+    "history": [],
+    "roster": [],
+    "wins": 1,
+    "losses": 0,
+    "win_rate": 0.0,
+    "avg_points": 0.0,
+    "rank": null
+  },
+  {
+    "name": "ENHYPEN",
+    "mmr": "TBD",
+    "matches_played": 0,
+    "active": true,
+    "history": [],
+    "roster": [],
+    "wins": 1,
+    "losses": 0,
+    "win_rate": 0.0,
+    "avg_points": 0.0,
+    "rank": null
+  }
+]

@@ -1,0 +1,13 @@
+{
+    "BASE_MMR": 1000,
+    "PLACEMENT_MATCHES": 2,
+    "K_FACTOR": 30,
+    "CHALLENGE_MULTIPLIER": 0.5,
+    "INACTIVITY_PENALTY": 10,
+    "MARGIN_BONUS": {
+        "3_0": 5,
+        "3_1": 3,
+        "3_2": 1
+    },
+    "POINT_DIFF_MULTIPLIER": 0.1
+}

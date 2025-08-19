@@ -1,0 +1,110 @@
+{
+  "teams": [
+    {
+      "name": "Kogarashi",
+      "mmr": 1054,
+      "matches_played": 5,
+      "active": true,
+      "history": [
+        "Week 1 - Won 3-0 vs Buldak (+16.4 MMR, +1.5 point diff)",
+        "Week 2 - Won 3-0 vs Buldak (+14.8 MMR, +0.6 set diff)",
+        "Week 3 - Won 3-1 vs dawnwalkers (+14.4 MMR, +2.9 set diff)",
+        "Week 4 - Won 3-0 vs XIII (+22.5 MMR, +7.2 set diff)",
+        "Week 5 - Lost 0-3 vs dawnwalkers (-12.8 MMR)"
+      ],
+      "roster": [
+        {
+          "name": "awaken",
+          "role": "Captain",
+          "matches_played": 0,
+          "join_date": "2025-08-18T18:52:02.630380"
+        }
+      ],
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "avg_points": 0,
+      "rank": 1
+    },
+    {
+      "name": "Buldak",
+      "mmr": 962,
+      "matches_played": 4,
+      "active": true,
+      "history": [
+        "Week 1 - Lost 0-3 vs Kogarashi (-9.9 MMR)",
+        "Week 2 - Lost 0-3 vs Kogarashi (-9.2 MMR)",
+        "Week 3 - Lost 0-3 vs XIII (-8.4 MMR)",
+        "Week 5 - Lost 0-3 vs XIII (-7.9 MMR)"
+      ],
+      "roster": [
+        {
+          "name": "tok",
+          "role": "Captain",
+          "matches_played": 0,
+          "join_date": "2025-08-18T18:52:02.630380"
+        }
+      ],
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0,
+      "avg_points": 0,
+      "rank": 2
+    },
+    {
+      "name": "XIII",
+      "mmr": 1064,
+      "matches_played": 5,
+      "active": true,
+      "history": [
+        "Week 1 - Won 3-1 vs dawnwalkers (+19.7 MMR, +6.7 set diff)",
+        "Week 2 - Won 3-0 vs dawnwalkers (+18.6 MMR, +4.5 set diff)",
+        "Week 3 - Won 3-0 vs Buldak (+20.6 MMR, +7.2 set diff)",
+        "Week 4 - Lost 0-3 vs Kogarashi (-10.3 MMR)",
+        "Week 5 - Won 3-0 vs Buldak (+20.4 MMR, +7.5 set diff)"
+      ],
+      "roster": [
+        {
+          "name": "aireu",
+          "role": "Captain",
+          "matches_played": 0,
+          "join_date": "2025-08-18T18:52:02.630380"
+        }
+      ],
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "avg_points": 98.0,
+      "rank": 2
+    },
+    {
+      "name": "dawnwalkers",
+      "mmr": 993,
+      "matches_played": 4,
+      "active": true,
+      "history": [
+        "Week 1 - Lost 1-3 vs XIII (-10.0 MMR)",
+        "Week 2 - Lost 0-3 vs XIII (-9.1 MMR)",
+        "Week 3 - Lost 1-3 vs Kogarashi (-8.5 MMR)",
+        "Week 5 - Won 3-0 vs Kogarashi (+25.3 MMR, +7.5 set diff)"
+      ],
+      "roster": [
+        {
+          "name": "xau",
+          "role": "Captain",
+          "matches_played": 0,
+          "join_date": "2025-08-18T18:52:02.630380"
+        }
+      ],
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0,
+      "avg_points": 0,
+      "rank": 4
+    }
+  ],
+  "matches": [],
+  "export_date": "20250818_223615",
+  "total_teams": 4,
+  "total_matches": 0
+}

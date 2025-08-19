@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}{{ team.name }} - Team Roster{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Team Header -->
+    <div class="col-12 mb-4">
+        <div class="card bg-gradient text-white" style="background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-body text-center">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="display-4 mb-3">{{ team.name }}</h1>
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <h4 class="mb-0">{{ team.mmr }}</h4>
+                                <small>MMR Rating</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h4 class="mb-0">{{ team.matches_played }}</h4>
+                                <small>Matches Played</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h4 class="mb-0">{{ team.rank if team.rank else 'N/A' }}</h4>
+                                <small>Current Rank</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h4 class="mb-0">{{ 'Active' if team.active else 'Inactive' }}</h4>
+                                <small>Status</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        {% if team.rank == 1 %}
+                            <i class="fas fa-crown fa-5x text-warning"></i>
+                        {% elif team.rank and team.rank <= 3 %}
+                            <i class="fas fa-medal fa-5x text-secondary"></i>
+                        {% else %}
+                            <i class="fas fa-user-friends fa-5x text-white-50"></i>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Team Roster -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-users me-2"></i>Team Roster
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if team.roster %}
+                <div class="list-group">
+                    {% for player in team.roster %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">{{ player.name }}</h6>
+                            <small class="text-muted">{{ player.role if player.role else 'Player' }}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-primary me-2">{{ player.matches_played if player.matches_played else 0 }}</span>
+                            <small class="text-muted">matches</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-user-plus fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No roster information available</p>
+                    <small>Contact an administrator to add team members</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Stats -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>Performance Stats
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-primary mb-1">{{ team.wins if team.wins else 0 }}</h4>
+                            <small class="text-muted">Wins</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-danger mb-1">{{ team.losses if team.losses else 0 }}</h4>
+                            <small class="text-muted">Losses</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-success mb-1">{{ "%.1f"|format(team.win_rate * 100) if team.win_rate else 0 }}%</h4>
+                            <small class="text-muted">Win Rate</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-info mb-1">{{ team.avg_points if team.avg_points else 0 }}</h4>
+                            <small class="text-muted">Avg Points</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Match History -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history me-2"></i>Match History
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if matches %}
+                <div class="timeline">
+                    {% for match in matches %}
+                    <div class="timeline-item mb-3">
+                        <div class="card {{ 'border-success' if (match.team_a == team.name and match.score and match.score[0] > match.score[1]) or (match.team_b == team.name and match.score and match.score[1] > match.score[0]) else 'border-danger' if match.completed else 'border-warning' }}">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-3">
+                                        <h6 class="mb-1">Week {{ match.week }}</h6>
+                                        <small class="text-muted">{{ match.timestamp[:10] if match.timestamp else 'Scheduled' }}</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="text-center">
+                                            <strong>{{ match.team_a }}</strong>
+                                            {% if match.score %}
+                                                <span class="badge bg-{{ 'success' if match.score[0] > match.score[1] else 'danger' }} mx-2">
+                                                    {{ match.score[0] }}-{{ match.score[1] }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted mx-2">vs</span>
+                                            {% endif %}
+                                            <strong>{{ match.team_b }}</strong>
+                                        </div>
+                                        {% if match.completed and match.set_scores %}
+                                        <small class="text-muted">
+                                            Set Scores: 
+                                            {% for set_score in match.set_scores %}
+                                                <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
+                                            {% endfor %}
+                                        </small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-3 text-end">
+                                        {% if match.completed %}
+                                            {% if (match.team_a == team.name and match.score and match.score[0] > match.score[1]) or (match.team_b == team.name and match.score and match.score[1] > match.score[0]) %}
+                                                <span class="badge bg-success">Victory</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Defeat</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                        <br>
+                                        <a href="{{ url_for('match_detail', match_id=match.match_id) }}" class="btn btn-sm btn-outline-primary mt-1">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-gamepad fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No matches played yet</p>
+                    <small>This team hasn't participated in any matches</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.timeline-item {
+    border-left: 3px solid #007bff;
+    padding-left: 15px;
+    position: relative;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #007bff;
+}
+
+.bg-gradient {
+    background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+}
+</style>
+{% endblock %}

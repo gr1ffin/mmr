@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Leaderboard - MMR Competitive Ladder{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h3 class="mb-0">
+                        <i class="fas fa-trophy me-2"></i>Complete Leaderboard
+                    </h3>
+                    <p class="text-muted mb-0 mt-2">Teams ranked by MMR (Matchmaking Rating)</p>
+                </div>
+                <button id="refreshLeaderboardBtn" class="btn btn-success" onclick="refreshLeaderboard()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Rank</th>
+                                <th>Team</th>
+                                <th>MMR</th>
+                                <th>Record</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for team in teams %}
+                            <tr>
+                                <td>
+                                    {% if loop.index == 1 %}
+                                        <span class="badge bg-warning text-dark fs-6">
+                                            <i class="fas fa-crown me-1"></i>{{ loop.index }}
+                                        </span>
+                                    {% elif loop.index <= 3 %}
+                                        <span class="badge bg-secondary fs-6">{{ loop.index }}</span>
+                                    {% elif loop.index <= 10 %}
+                                        <span class="badge bg-info text-dark fs-6">{{ loop.index }}</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark">{{ loop.index }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            {% if loop.index == 1 %}
+                                                <i class="fas fa-medal text-warning fs-4"></i>
+                                            {% elif loop.index <= 3 %}
+                                                <i class="fas fa-medal text-secondary fs-4"></i>
+                                            {% else %}
+                                                <i class="fas fa-user-friends text-muted"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">{{ team.name }}</h6>
+                                            <small class="text-muted">ID: {{ loop.index }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="mmr-badge fs-6">{{ team.mmr }}</span>
+                                    {% if loop.index > 1 %}
+                                        {% set prev_mmr = teams[loop.index - 2].mmr %}
+                                        {% set diff = prev_mmr - team.mmr %}
+                                        <br><small class="text-muted">{{ diff }} behind</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-primary me-2">{{ team.wins }} - {{ team.losses }}</span>
+                                        <small class="text-muted">(W-L)</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if team.active else 'danger' }}">
+                                        <i class="fas fa-{{ 'check-circle' if team.active else 'times-circle' }} me-1"></i>
+                                        {{ 'Active' if team.active else 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('team_detail', team_name=team.name) }}" 
+                                           class="btn btn-sm btn-outline-primary" 
+                                           title="View Team Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-info" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#historyModal{{ loop.index }}"
+                                                title="View Match History">
+                                            <i class="fas fa-history"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Modals -->
+{% for team in teams %}
+<div class="modal fade" id="historyModal{{ loop.index }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-history me-2"></i>{{ team.name }} - Match History
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if team.history %}
+                <div class="timeline">
+                    {% for entry in team.history[-10:] %}  <!-- Show last 10 entries -->
+                    <div class="timeline-item mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <p class="mb-0">{{ entry }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center">No match history available.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="{{ url_for('team_detail', team_name=team.name) }}" class="btn btn-primary">View Full Profile</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Statistics Section -->
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                <h4>{{ teams|length }}</h4>
+                <p class="text-muted">Total Teams</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-trophy fa-3x text-warning mb-3"></i>
+                <h4>{{ teams[0].mmr if teams else 0 }}</h4>
+                <p class="text-muted">Highest MMR</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-chart-line fa-3x text-success mb-3"></i>
+                <h4>{{ (teams|map(attribute='mmr')|sum / teams|length)|round(1) if teams else 0 }}</h4>
+                <p class="text-muted">Average MMR</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshLeaderboard() {
+    // Show loading state
+    const btn = document.getElementById('refreshLeaderboardBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
+    btn.disabled = true;
+    
+    // Make AJAX request to refresh endpoint
+    fetch('/admin/refresh_data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            btn.innerHTML = '<i class="fas fa-check me-2"></i>Refreshed!';
+            btn.className = 'btn btn-success';
+            
+            // Reload the page after a short delay to show updated data
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            // Show error message
+            btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
+            btn.className = 'btn btn-danger';
+        }
+    })
+    .catch(error => {
+        // Show error message
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
+        btn.className = 'btn btn-danger';
+    })
+    .finally(() => {
+        // Reset button after a delay
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.className = 'btn btn-success';
+            btn.disabled = false;
+        }, 3000);
+    });
+}
+</script>
+
+<style>
+.timeline-item {
+    border-left: 3px solid #007bff;
+    padding-left: 15px;
+    position: relative;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #007bff;
+}
+</style>
+{% endblock %}
