@@ -43,7 +43,9 @@
                             {% for team in teams %}
                             <tr>
                                 <td>
-                                    <strong>{{ team.name }}</strong>
+                                    <a href="{{ url_for('team_detail', team_name=team.name) }}" class="text-decoration-none">
+                                        <strong>{{ team.name }}</strong>
+                                    </a>
                                     <br><small class="text-muted">Rank: {{ loop.index }}</small>
                                 </td>
                                 <td>
@@ -257,7 +259,9 @@
 <script>
 function removePlayer(teamName, playerName) {
     if (confirm(`Remove ${playerName} from ${teamName}?`)) {
-        fetch(`/admin/remove_player/${teamName}/${playerName}`, {
+        const t = encodeURIComponent(teamName);
+        const p = encodeURIComponent(playerName);
+        fetch(`/admin/remove_player/${t}/${p}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -274,7 +278,8 @@ function removePlayer(teamName, playerName) {
 
 function resetTeamMMR(teamName) {
     if (confirm(`Reset ${teamName} MMR to 1000?`)) {
-        fetch(`/admin/reset_team_mmr/${teamName}`, {
+        const t = encodeURIComponent(teamName);
+        fetch(`/admin/reset_team_mmr/${t}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -291,7 +296,8 @@ function resetTeamMMR(teamName) {
 
 function clearTeamHistory(teamName) {
     if (confirm(`Clear match history for ${teamName}? This cannot be undone.`)) {
-        fetch(`/admin/clear_team_history/${teamName}`, {
+        const t = encodeURIComponent(teamName);
+        fetch(`/admin/clear_team_history/${t}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -308,14 +314,15 @@ function clearTeamHistory(teamName) {
 
 function deleteTeam(teamName) {
     if (confirm(`Delete ${teamName}? This will remove all data and cannot be undone.`)) {
-        fetch(`/admin/delete_team/${teamName}`, {
+        const t = encodeURIComponent(teamName);
+        fetch(`/admin/delete_team/${t}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             }
         }).then(response => {
             if (response.ok) {
-                window.location.href = "{{ url_for('teams') }}";
+                location.reload();
             } else {
                 alert('Error deleting team');
             }
@@ -323,7 +330,6 @@ function deleteTeam(teamName) {
     }
 }
 
-// New: Force recalculate all MMR
 function forceRecalculateAll() {
     if (confirm('Force recalculate MMR for all teams from full match history? This may take a moment.')) {
         fetch('/admin/recalculate_mmr', {
