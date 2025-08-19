@@ -6,38 +6,87 @@
 <div class="row">
     <!-- Team Header -->
     <div class="col-12 mb-4">
-        <div class="card bg-gradient text-white" style="background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);">
-            <div class="card-body text-center">
+        <div class="card text-white" style="background: linear-gradient(135deg, {{ team.hexcolor if team.hexcolor else '#667eea' }} 0%, #0f172a 100%);">
+            <div class="card-body">
                 <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h1 class="display-4 mb-3">{{ team.name }}</h1>
-                        <div class="row text-center">
-                            <div class="col-md-3">
-                                <h4 class="mb-0">{{ team.mmr }}</h4>
-                                <small>MMR Rating</small>
+                    <div class="col-md-3 text-center mb-3 mb-md-0">
+                        {% if team.logo %}
+                            <img src="{{ team.logo }}" alt="{{ team.name }} logo" style="width:192px;height:192px;object-fit:cover;border-radius:8px;border:2px solid rgba(255,255,255,.4);">
+                        {% else %}
+                            <div class="d-flex align-items-center justify-content-center" style="width:192px;height:192px;border-radius:8px;background: rgba(255,255,255,.08);border:2px dashed rgba(255,255,255,.25);">
+                                <i class="fas fa-shield-alt fa-3x text-white-50"></i>
                             </div>
-                            <div class="col-md-3">
-                                <h4 class="mb-0">{{ team.matches_played }}</h4>
-                                <small>Matches Played</small>
-                            </div>
-                            <div class="col-md-3">
-                                <h4 class="mb-0">{{ team.rank if team.rank else 'N/A' }}</h4>
-                                <small>Current Rank</small>
-                            </div>
-                            <div class="col-md-3">
-                                <h4 class="mb-0">{{ 'Active' if team.active else 'Inactive' }}</h4>
-                                <small>Status</small>
-                            </div>
+                        {% endif %}
+                        <div class="mt-2 d-inline-flex align-items-center">
+                            <span class="d-inline-block rounded-circle me-2" style="width:16px;height:16px;background-color: {{ team.hexcolor if team.hexcolor else '#667eea' }};"></span>
+                            <small class="text-white-50">{{ team.hexcolor if team.hexcolor else '#667eea' }}</small>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        {% if team.rank == 1 %}
-                            <i class="fas fa-crown fa-5x text-warning"></i>
-                        {% elif team.rank and team.rank <= 3 %}
-                            <i class="fas fa-medal fa-5x text-secondary"></i>
-                        {% else %}
-                            <i class="fas fa-user-friends fa-5x text-white-50"></i>
-                        {% endif %}
+                    <div class="col-md-9">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap">
+                            <h1 class="display-5 mb-2 mb-md-0">{{ team.name }}</h1>
+                            {% if rank == 1 %}
+                                <span class="badge bg-warning text-dark fs-6"><i class="fas fa-crown me-1"></i> Top Ranked</span>
+                            {% elif rank and rank <= 3 %}
+                                <span class="badge bg-secondary fs-6"><i class="fas fa-medal me-1"></i> Top 3</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Summary Stats -->
+                        <div class="row text-center g-2 mt-3">
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h4 class="mb-0 text-white">{{ display_mmr }}</h4>
+                                    <small class="text-white-50">MMR{% if display_mmr == 'TBD' %} ({{ placement_matches - team.matches_played }} left){% endif %}</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h4 class="mb-0 text-white">{{ team.matches_played }}</h4>
+                                    <small class="text-white-50">Matches</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h4 class="mb-0 text-white">{{ rank if rank else 'N/A' }}</h4>
+                                    <small class="text-white-50">Rank</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h4 class="mb-0 text-white">{{ 'Active' if team.active else 'Inactive' }}</h4>
+                                    <small class="text-white-50">Status</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Performance Stats inside Header -->
+                        <div class="row text-center g-2 mt-3">
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h5 class="text-white mb-1">{{ team.wins if team.wins else 0 }}</h5>
+                                    <small class="text-white-50">Wins</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h5 class="text-white mb-1">{{ team.losses if team.losses else 0 }}</h5>
+                                    <small class="text-white-50">Losses</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h5 class="text-white mb-1">{{ (win_rate * 100)|round(1) }}%</h5>
+                                    <small class="text-white-50">Win Rate</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="border rounded p-2 bg-dark bg-opacity-25">
+                                    <h5 class="text-white mb-1">{{ avg_points|round(1) }}</h5>
+                                    <small class="text-white-50">Avg Pts/Set</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -81,49 +130,8 @@
         </div>
     </div>
 
-    <!-- Team Stats -->
+    <!-- Match History (moved to right column) -->
     <div class="col-lg-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>Performance Stats
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-primary mb-1">{{ team.wins if team.wins else 0 }}</h4>
-                            <small class="text-muted">Wins</small>
-                        </div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-danger mb-1">{{ team.losses if team.losses else 0 }}</h4>
-                            <small class="text-muted">Losses</small>
-                        </div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-success mb-1">{{ "%.1f"|format(team.win_rate * 100) if team.win_rate else 0 }}%</h4>
-                            <small class="text-muted">Win Rate</small>
-                        </div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <h4 class="text-info mb-1">{{ team.avg_points if team.avg_points else 0 }}</h4>
-                            <small class="text-muted">Avg Points</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Match History -->
-<div class="row">
-    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -138,11 +146,11 @@
                         <div class="card {{ 'border-success' if (match.team_a == team.name and match.score and match.score[0] > match.score[1]) or (match.team_b == team.name and match.score and match.score[1] > match.score[0]) else 'border-danger' if match.completed else 'border-warning' }}">
                             <div class="card-body">
                                 <div class="row align-items-center">
-                                    <div class="col-md-3">
+                                    <div class="col-md-4">
                                         <h6 class="mb-1">Week {{ match.week }}</h6>
                                         <small class="text-muted">{{ match.timestamp[:10] if match.timestamp else 'Scheduled' }}</small>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-5">
                                         <div class="text-center">
                                             <strong>{{ match.team_a }}</strong>
                                             {% if match.score %}
@@ -156,7 +164,7 @@
                                         </div>
                                         {% if match.completed and match.set_scores %}
                                         <small class="text-muted">
-                                            Set Scores: 
+                                            Set Scores:
                                             {% for set_score in match.set_scores %}
                                                 <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
                                             {% endfor %}
@@ -216,6 +224,7 @@
     background: #007bff;
 }
 
+/* legacy gradient class kept for compatibility */
 .bg-gradient {
     background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
 }

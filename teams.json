@@ -1,69 +1,215 @@
 [
   {
     "name": "Kogarashi",
-    "mmr": 1019,
+    "mmr": 1004,
     "matches_played": 2,
     "history": [
-      "Won 3-0 vs XIII",
-      "Won 3-0 vs ENHYPEN"
+      "Won 3-0 vs Blossom (+20 MMR, +45 pts)",
+      "Lost 0-3 vs Wandenreich (-16 MMR, -0 pts)"
     ],
-    "wins": 2,
-    "losses": 0,
-    "active": true
+    "wins": 1,
+    "losses": 1,
+    "active": true,
+    "provisional": false,
+    "roster": [
+      {
+        "name": "awaken - cruciaImind",
+        "role": "Captain",
+        "matches_played": 0
+      },
+      {
+        "name": "aaron - distszn",
+        "role": "Vice",
+        "matches_played": 0
+      },
+      {
+        "name": "nav - augustwithplg",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "zzsmart - ZzsmartWasTaken",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "autumn - r0ckedd",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "1c - demongkingcm",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "fairy - vroomvroomimindacar",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "Karosh - typicaldefenders",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "tenshi - Retr0XD",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "Diego - PlayingWithMumAt3",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "Syn - Synthik_911",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "ren - renirq",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "Azude - AzudeAlt3",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "Jin - jeanisnotonfire103",
+        "role": "",
+        "matches_played": 0
+      },
+      {
+        "name": "Noble - Gokusootybay",
+        "role": "",
+        "matches_played": 0
+      }
+    ],
+    "logo": "https://media.discordapp.net/attachments/1323505229756498024/1407420708463837356/koga.png?ex=68a60a2d&is=68a4b8ad&hm=f8e673eb1dbdc35b021b11e25ff0b29ddad9663787df94df61da7189037c245a&=&format=webp&quality=lossless&width=1638&height=1638",
+    "hexcolor": "#374151"
   },
   {
     "name": "Buldak",
-    "mmr": 980,
-    "matches_played": 2,
-    "history": [
-      "Lost 0-3 vs Dawnwalkers",
-      "Lost 1-3 vs Dawnwalkers"
-    ],
-    "wins": 0,
-    "losses": 2,
-    "active": true
-  },
-  {
-    "name": "XIII",
-    "mmr": 990,
-    "matches_played": 1,
-    "history": [
-      "Lost 0-3 vs Kogarashi"
-    ],
-    "wins": 0,
-    "losses": 1,
-    "active": true
-  },
-  {
-    "name": "Dawnwalkers",
-    "mmr": 1019,
-    "matches_played": 2,
-    "history": [
-      "Won 3-0 vs Buldak",
-      "Won 3-1 vs Buldak"
-    ],
-    "wins": 2,
-    "losses": 0,
-    "active": true
-  },
-  {
-    "name": "Tekkai",
     "mmr": 1000,
     "matches_played": 0,
     "history": [],
     "wins": 0,
     "losses": 0,
-    "active": true
+    "active": true,
+    "provisional": true,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
   },
   {
-    "name": "ENHYPEN",
-    "mmr": 990,
+    "name": "XIII",
+    "mmr": 981,
     "matches_played": 1,
     "history": [
-      "Lost 0-3 vs Kogarashi"
+      "Lost 0-3 vs Dawnwalkers (-19 MMR, -42 pts)"
     ],
     "wins": 0,
     "losses": 1,
-    "active": true
+    "active": true,
+    "provisional": true,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
+  },
+  {
+    "name": "Dawnwalkers",
+    "mmr": 1019,
+    "matches_played": 1,
+    "history": [
+      "Won 3-0 vs XIII (+19 MMR, +42 pts)"
+    ],
+    "wins": 1,
+    "losses": 0,
+    "active": true,
+    "provisional": true,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
+  },
+  {
+    "name": "Tekkai",
+    "mmr": 962,
+    "matches_played": 2,
+    "history": [
+      "Lost 0-3 vs Blossom (-20 MMR, -48 pts)",
+      "Lost 0-3 vs Wandenreich (-18 MMR, -40 pts)"
+    ],
+    "wins": 0,
+    "losses": 2,
+    "active": true,
+    "provisional": false,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
+  },
+  {
+    "name": "ENHYPEN",
+    "mmr": 1020,
+    "matches_played": 1,
+    "history": [
+      "Won 3-0 vs Goonstars (+20 MMR, +45 pts)"
+    ],
+    "wins": 1,
+    "losses": 0,
+    "active": true,
+    "provisional": true,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
+  },
+  {
+    "name": "Goonstars",
+    "mmr": 980,
+    "matches_played": 1,
+    "history": [
+      "Lost 0-3 vs ENHYPEN (-20 MMR, -45 pts)"
+    ],
+    "wins": 0,
+    "losses": 1,
+    "active": true,
+    "provisional": true,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
+  },
+  {
+    "name": "Wandenreich",
+    "mmr": 1034,
+    "matches_played": 2,
+    "history": [
+      "Won 3-0 vs Kogarashi (+16 MMR, +0 pts)",
+      "Won 3-0 vs Tekkai (+18 MMR, +40 pts)"
+    ],
+    "wins": 2,
+    "losses": 0,
+    "active": true,
+    "provisional": false,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
+  },
+  {
+    "name": "Blossom",
+    "mmr": 1000,
+    "matches_played": 2,
+    "history": [
+      "Lost 0-3 vs Kogarashi (-20 MMR, -45 pts)",
+      "Won 3-0 vs Tekkai (+20 MMR, +48 pts)"
+    ],
+    "wins": 1,
+    "losses": 1,
+    "active": true,
+    "provisional": false,
+    "roster": [],
+    "logo": "",
+    "hexcolor": "#374151"
   }
 ]

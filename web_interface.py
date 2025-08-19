@@ -13,9 +13,60 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this in production
-ADMIN_PASSWORD = "starsadmin*"  # Admin password
+ADMIN_PASSWORD = "stars"  # Admin password
 
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1407186075209830441/aIiJZZaAkTw_dDojhbCE1W_g4E8se9Ie-RQ-ohwXv2mnIErQW0MNYeE4Pg8FSe7z3kMn"  # Add your Discord webhook URL here
+# Discord webhook URL should be provided via environment variable only (no hard-coded secrets)
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1407186075209830441/aIiJZZaAkTw_dDojhbCE1W_g4E8se9Ie-RQ-ohwXv2mnIErQW0MNYeE4Pg8FSe7z3kMn"
+
+# Helper: send a plain text message to Discord via webhook (best-effort)
+def _post_discord_webhook_message(content: str) -> None:
+    if not DISCORD_WEBHOOK_URL:
+        return
+    try:
+        resp = requests.post(DISCORD_WEBHOOK_URL, json={'content': content}, timeout=5)
+        if resp.status_code not in (200, 204):
+            logging.warning(f"Discord webhook returned status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        logging.warning(f"Failed to post Discord webhook: {e}")
+
+# Helper: send an embed to Discord via webhook (best-effort)
+def _post_discord_embed(embed: Dict) -> None:
+    if not DISCORD_WEBHOOK_URL:
+        return
+    payload = {
+        # You can optionally set a username/avatar for the webhook appearance
+        # 'username': 'MMR Bot',
+        # 'avatar_url': 'https://example.com/avatar.png',
+        'embeds': [embed]
+    }
+    try:
+        resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
+        if resp.status_code not in (200, 204):
+            logging.warning(f"Discord webhook (embed) returned status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        logging.warning(f"Failed to post Discord embed: {e}")
+
+# Helper: format and send a match result notification
+def notify_discord_match_result(match: Match, score_a: int, score_b: int, set_scores: Optional[List[str]]) -> None:
+    try:
+        match_url = request.url_root.rstrip('/') + url_for('match_detail', match_id=match.match_id)
+        sets_text = ', '.join(set_scores) if set_scores else 'N/A'
+        # Choose a color (green if team_a won, red if team_b won, gray if tie)
+        color = 0x57F287 if score_a > score_b else (0xED4245 if score_b > score_a else 0x99AAB5)
+        embed = {
+            'title': f"Match Result - Week {match.week}",
+            'description': f"{match.team_a} {score_a}-{score_b} {match.team_b}",
+            'color': color,
+            'fields': [
+                {'name': 'Set Scores', 'value': sets_text, 'inline': False},
+                {'name': 'Details', 'value': f"[View Match]({match_url})", 'inline': False}
+            ],
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'footer': {'text': 'MMR System'}
+        }
+        _post_discord_embed(embed)
+    except Exception as e:
+        logging.warning(f"Failed to compose/send Discord notification: {e}")
 
 # Global MMR system instance
 mmr_system = MMRSystem()
@@ -99,9 +150,11 @@ def matches():
 
 @app.route('/teams')
 def teams():
-    """Show all teams."""
+    """Show all teams with placed and provisional separation."""
     teams_sorted = sorted(mmr_system.teams, key=lambda x: x.mmr, reverse=True)
-    return render_template('teams.html', teams=teams_sorted)
+    placed_teams = [t for t in teams_sorted if t.matches_played >= mmr_system.placement_matches]
+    provisional_teams = [t for t in teams_sorted if t.matches_played < mmr_system.placement_matches]
+    return render_template('teams.html', teams=teams_sorted, placed_teams=placed_teams, provisional_teams=provisional_teams, placement_matches=mmr_system.placement_matches)
 
 @app.route('/team/<team_name>')
 def team_detail(team_name):
@@ -115,7 +168,42 @@ def team_detail(team_name):
     team_matches = [m for m in mmr_system.matches if m.team_a == team_name or m.team_b == team_name]
     team_matches.sort(key=lambda x: x.week, reverse=True)
 
-    return render_template('team_detail.html', team=team, matches=team_matches)
+    # Compute derived stats
+    placed = team.matches_played >= mmr_system.placement_matches
+    display_mmr = team.mmr if placed else 'TBD'
+
+    total_wins = team.wins
+    total_losses = team.losses
+    total_games = total_wins + total_losses
+    win_rate = (total_wins / total_games) if total_games > 0 else 0.0
+
+    # Average points from set scores
+    total_points = 0
+    total_sets = 0
+    for m in team_matches:
+        if not m.set_scores:
+            continue
+        for s in m.set_scores:
+            try:
+                a_str, b_str = s.split(':')
+                a = int(a_str); b = int(b_str)
+                if m.team_a == team.name:
+                    total_points += a
+                elif m.team_b == team.name:
+                    total_points += b
+                total_sets += 1
+            except Exception:
+                continue
+    avg_points = (total_points / total_sets) if total_sets > 0 else 0
+
+    # Rank in leaderboard (only if placed)
+    lb = mmr_system.get_leaderboard()
+    try:
+        rank = next(i+1 for i, t in enumerate(lb) if t.name == team.name)
+    except StopIteration:
+        rank = None
+
+    return render_template('team_detail.html', team=team, matches=team_matches, display_mmr=display_mmr, win_rate=win_rate, avg_points=avg_points, rank=rank, placement_matches=mmr_system.placement_matches)
 
 @app.route('/admin_login', methods=['GET', 'POST'])
 def admin_login():
@@ -150,6 +238,14 @@ def create_team():
     """Create a new team."""
     if request.method == 'POST':
         team_name = request.form.get('team_name')
+        try:
+            initial_mmr = int(request.form.get('initial_mmr', BASE_MMR))
+        except ValueError:
+            initial_mmr = BASE_MMR
+        active = True if request.form.get('active') in ('on', 'true', '1') else False
+        player_names = request.form.getlist('player_names[]')
+        player_roles = request.form.getlist('player_roles[]')
+
         if not team_name:
             flash('Team name is required!', 'error')
             return render_template('create_team.html')
@@ -160,7 +256,17 @@ def create_team():
             return render_template('create_team.html')
 
         # Create and add the new team
-        new_team = Team(name=team_name)
+        new_team = Team(name=team_name, mmr=initial_mmr)
+        new_team.active = active
+        new_team.provisional = True
+        # Build roster
+        roster = []
+        for n, r in zip(player_names, player_roles):
+            n = (n or '').strip()
+            if n:
+                roster.append({'name': n, 'role': (r or '').strip(), 'matches_played': 0})
+        new_team.roster = roster
+
         mmr_system.teams.append(new_team)
         mmr_system.save_data()
 
@@ -179,7 +285,10 @@ def generate_matches():
         except ValueError:
             matches_per_team = 1
         new_matches = mmr_system.generate_weekly_matches(matches_per_team)
-        flash(f"Generated {len(new_matches)} matches for Week {mmr_system.current_week}.", 'success')
+        if not new_matches:
+            flash("Could not generate a complete schedule with the current constraints. No matches were created.", 'error')
+        else:
+            flash(f"Generated {len(new_matches)} matches for Week {mmr_system.current_week}.", 'success')
         return redirect(url_for('matches'))
     return render_template('generate_matches.html')
 
@@ -211,11 +320,18 @@ def input_result(match_id):
 
         # Collect set scores from form set_1_a/set_1_b ... set_5_a/set_5_b
         set_scores: List[str] = []
+        totals_a = 0
+        totals_b = 0
         for i in range(1, 6):
             a = request.form.get(f'set_{i}_a')
             b = request.form.get(f'set_{i}_b')
             if a and b:
                 set_scores.append(f"{a}:{b}")
+                try:
+                    totals_a += int(a)
+                    totals_b += int(b)
+                except ValueError:
+                    pass
 
         # Update MMR
         team_a = next((t for t in mmr_system.teams if t.name == match.team_a), None)
@@ -225,7 +341,12 @@ def input_result(match_id):
             return render_template('input_result.html', match=match)
 
         winner, loser = (team_a, team_b) if score_a > score_b else (team_b, team_a)
-        mmr_system.update_mmr(winner, loser, (score_a, score_b), set_scores)
+        # Map totals to winner/loser orientation
+        if winner is team_a:
+            pw, pl = totals_a, totals_b
+        else:
+            pw, pl = totals_b, totals_a
+        mmr_system.update_mmr(winner, loser, (score_a, score_b), set_scores=set_scores, points_winner=pw, points_loser=pl)
 
         # Persist match result
         match.score = (score_a, score_b)
@@ -233,6 +354,9 @@ def input_result(match_id):
         match.completed = True
         match.timestamp = datetime.now().isoformat()
         mmr_system.save_data()
+
+        # Notify Discord webhook about the result (best-effort)
+        notify_discord_match_result(match, score_a, score_b, set_scores)
 
         flash('Match result updated successfully.', 'success')
         return redirect(url_for('matches'))
@@ -432,6 +556,191 @@ def export_data():
     except Exception as e:
         flash(f'Export failed: {str(e)}', 'error')
     return redirect(url_for('admin_panel'))
+
+@app.route('/admin/recalculate_mmr', methods=['POST'])
+@admin_required
+def recalculate_mmr():
+    mmr_system.load_data()  # reload latest JSON edits from disk
+    mmr_system.recalculate_all_mmr()
+    flash('Recalculated MMR from complete match history.', 'success')
+    return redirect(request.referrer or url_for('leaderboard'))
+
+@app.route('/admin/edit_team/<team_name>', methods=['POST'])
+@admin_required
+def edit_team(team_name):
+    team = next((t for t in mmr_system.teams if t.name == team_name), None)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('manage_teams'))
+    new_name = request.form.get('team_name', team.name).strip()
+    try:
+        new_mmr = int(request.form.get('mmr', team.mmr))
+    except ValueError:
+        new_mmr = team.mmr
+    active = True if request.form.get('active') in ('on', 'true', '1') else False
+
+    # Handle rename: update matches references
+    old_name = team.name
+    team.name = new_name
+    team.mmr = new_mmr
+    team.active = active
+
+    if old_name != new_name:
+        for m in mmr_system.matches:
+            if m.team_a == old_name:
+                m.team_a = new_name
+            if m.team_b == old_name:
+                m.team_b = new_name
+
+    mmr_system.save_data()
+    flash('Team updated successfully.', 'success')
+    return redirect(url_for('manage_teams'))
+
+# Roster management
+@app.route('/admin/add_player/<team_name>', methods=['POST'])
+@admin_required
+def add_player(team_name):
+    team = next((t for t in mmr_system.teams if t.name == team_name), None)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('manage_teams'))
+    player_name = request.form.get('player_name')
+    role = request.form.get('role')
+    if not player_name:
+        flash('Player name is required.', 'error')
+        return redirect(url_for('manage_teams'))
+    if team.roster is None:
+        team.roster = []
+    # Avoid duplicates by name (case-insensitive)
+    if any(p.get('name', '').lower() == player_name.lower() for p in team.roster):
+        flash('Player already in roster.', 'error')
+        return redirect(url_for('manage_teams'))
+    team.roster.append({'name': player_name, 'role': role, 'matches_played': 0})
+    mmr_system.save_data()
+    flash('Player added.', 'success')
+    return redirect(url_for('manage_teams'))
+
+@app.route('/admin/remove_player/<team_name>/<player_name>', methods=['POST'])
+@admin_required
+def remove_player(team_name, player_name):
+    team = next((t for t in mmr_system.teams if t.name == team_name), None)
+    if not team:
+        return ('Team not found', 404)
+    team.roster = [p for p in (team.roster or []) if p.get('name') != player_name]
+    mmr_system.save_data()
+    return ('', 204)
+
+@app.route('/admin/reset_team_mmr/<team_name>', methods=['POST'])
+@admin_required
+def reset_team_mmr(team_name):
+    team = next((t for t in mmr_system.teams if t.name == team_name), None)
+    if not team:
+        return ('Team not found', 404)
+    team.mmr = BASE_MMR
+    mmr_system.save_data()
+    return ('', 204)
+
+@app.route('/admin/clear_team_history/<team_name>', methods=['POST'])
+@admin_required
+def clear_team_history(team_name):
+    # Remove matches involving this team, then recalc
+    before = len(mmr_system.matches)
+    mmr_system.matches = [m for m in mmr_system.matches if m.team_a != team_name and m.team_b != team_name]
+    mmr_system.save_data()
+    mmr_system.recalculate_all_mmr()
+    logging.info(f"Cleared {before - len(mmr_system.matches)} matches for {team_name} and recalculated.")
+    return ('', 204)
+
+@app.route('/admin/delete_team/<team_name>', methods=['POST'])
+@admin_required
+def delete_team(team_name):
+    # Remove team
+    mmr_system.teams = [t for t in mmr_system.teams if t.name != team_name]
+    # Remove related matches and recalc
+    mmr_system.matches = [m for m in mmr_system.matches if m.team_a != team_name and m.team_b != team_name]
+    mmr_system.save_data()
+    mmr_system.recalculate_all_mmr()
+    return ('', 204)
+
+# Update system settings (form action in system_settings.html)
+@app.route('/update_system_settings', methods=['POST'])
+@admin_required
+def update_system_settings():
+    try:
+        global config, BASE_MMR, PLACEMENT_MATCHES, K_FACTOR, CHALLENGE_MULTIPLIER, INACTIVITY_PENALTY, POINT_DIFF_MULTIPLIER, MARGIN_BONUS
+        base_mmr = int(request.form.get('base_mmr', BASE_MMR))
+        k_factor = int(request.form.get('k_factor', K_FACTOR))
+        placement_matches = int(request.form.get('placement_matches', 2))
+        challenge_multiplier = float(request.form.get('challenge_multiplier', 0.5))
+        inactivity_penalty = int(request.form.get('inactivity_penalty', 10))
+        point_diff_multiplier = float(request.form.get('point_diff_multiplier', 0.1))
+        margin_3_0 = int(request.form.get('margin_3_0', 5))
+        margin_3_1 = int(request.form.get('margin_3_1', 3))
+        margin_3_2 = int(request.form.get('margin_3_2', 1))
+
+        # Persist to config file
+        cfg = {
+            "BASE_MMR": base_mmr,
+            "PLACEMENT_MATCHES": placement_matches,
+            "K_FACTOR": k_factor,
+            "CHALLENGE_MULTIPLIER": challenge_multiplier,
+            "INACTIVITY_PENALTY": inactivity_penalty,
+            "MARGIN_BONUS": {
+                "3_0": margin_3_0,
+                "3_1": margin_3_1,
+                "3_2": margin_3_2
+            },
+            "POINT_DIFF_MULTIPLIER": point_diff_multiplier
+        }
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(cfg, f, indent=2)
+
+        # Update in-memory config and globals so routes use latest values
+        config = cfg
+        BASE_MMR = config["BASE_MMR"]
+        PLACEMENT_MATCHES = config["PLACEMENT_MATCHES"]
+        K_FACTOR = config["K_FACTOR"]
+        CHALLENGE_MULTIPLIER = config["CHALLENGE_MULTIPLIER"]
+        INACTIVITY_PENALTY = config["INACTIVITY_PENALTY"]
+        POINT_DIFF_MULTIPLIER = config["POINT_DIFF_MULTIPLIER"]
+        MARGIN_BONUS = {(3,0): margin_3_0, (3,1): margin_3_1, (3,2): margin_3_2}
+
+        # Apply to running system (for next calculations)
+        mmr_system.update_settings(k_factor=k_factor, inactivity_penalty=inactivity_penalty, point_diff_multiplier=point_diff_multiplier, margin_bonus={(3,0): margin_3_0, (3,1): margin_3_1, (3,2): margin_3_2})
+        mmr_system.placement_matches = placement_matches
+        # Update provisional flags based on new threshold
+        for t in mmr_system.teams:
+            t.provisional = t.matches_played < mmr_system.placement_matches
+        mmr_system.save_data()
+
+        flash('Settings updated.', 'success')
+    except Exception as e:
+        logging.exception("Error updating settings")
+        flash(f'Failed to update settings: {e}', 'error')
+    return redirect(url_for('system_settings'))
+
+@app.route('/reset_data', methods=['POST'])
+@admin_required
+def reset_data():
+    try:
+        # Clear all matches
+        mmr_system.matches = []
+        # Reset all teams to base state
+        for t in mmr_system.teams:
+            t.mmr = BASE_MMR
+            t.matches_played = 0
+            t.wins = 0
+            t.losses = 0
+            t.history = []
+            t.provisional = True
+        # Optionally reset week counter
+        mmr_system.current_week = 1
+        # Persist changes
+        mmr_system.save_data()
+        return ('', 204)
+    except Exception as e:
+        logging.exception('Failed to reset data')
+        return (str(e), 500)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

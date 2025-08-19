@@ -1,9 +1,9 @@
 [
   {
-    "match_id": "e4396242",
+    "match_id": "a29d91cc",
     "team_a": "Kogarashi",
-    "team_b": "ENHYPEN",
-    "week": 2,
+    "team_b": "Blossom",
+    "week": 1,
     "score": [
       3,
       0
@@ -14,71 +14,121 @@
       "25:10"
     ],
     "completed": true,
-    "timestamp": "2025-08-19T02:15:27.529416"
+    "timestamp": "2025-08-19T14:20:51.363271"
   },
   {
-    "match_id": "4baaa799",
-    "team_a": "Tekkai",
-    "team_b": "XIII",
-    "week": 2,
-    "score": null,
-    "set_scores": null,
-    "completed": false,
-    "timestamp": null
-  },
-  {
-    "match_id": "4f125afb",
+    "match_id": "da284cbb",
     "team_a": "Dawnwalkers",
-    "team_b": "Buldak",
-    "week": 2,
+    "team_b": "XIII",
+    "week": 1,
     "score": [
       3,
       0
     ],
     "set_scores": [
-      "25:15",
-      "25:15",
-      "25:15"
+      "25:11",
+      "25:11",
+      "25:11"
     ],
     "completed": true,
-    "timestamp": "2025-08-19T02:15:45.354461"
+    "timestamp": "2025-08-19T15:06:02.051155"
   },
   {
-    "match_id": "b3ab7462",
-    "team_a": "Tekkai",
-    "team_b": "ENHYPEN",
-    "week": 2,
-    "score": null,
-    "set_scores": null,
-    "completed": false,
-    "timestamp": null
-  },
-  {
-    "match_id": "98f34401",
-    "team_a": "Dawnwalkers",
-    "team_b": "Buldak",
-    "week": 2,
+    "match_id": "66c33860",
+    "team_a": "ENHYPEN",
+    "team_b": "Goonstars",
+    "week": 1,
     "score": [
       3,
-      1
+      0
     ],
     "set_scores": [
-      "25:20",
-      "25:20",
-      "20:25",
+      "25:10",
+      "25:10",
+      "25:10"
+    ],
+    "completed": true,
+    "timestamp": "2025-08-19T15:01:53.801941"
+  },
+  {
+    "match_id": "4202dee3",
+    "team_a": "Kogarashi",
+    "team_b": "Wandenreich",
+    "week": 1,
+    "score": [
+      0,
+      3
+    ],
+    "set_scores": [
+      "25:10",
+      "25:15",
       "25:20"
     ],
     "completed": true,
-    "timestamp": "2025-08-19T02:18:55.859133"
+    "timestamp": "2025-08-19T14:21:11.148644"
   },
   {
-    "match_id": "745c1f0c",
-    "team_a": "XIII",
-    "team_b": "Kogarashi",
-    "week": 2,
+    "match_id": "7774e682",
+    "team_a": "Buldak",
+    "team_b": "Dawnwalkers",
+    "week": 1,
     "score": null,
     "set_scores": null,
     "completed": false,
     "timestamp": null
+  },
+  {
+    "match_id": "b10fbdad",
+    "team_a": "Buldak",
+    "team_b": "Goonstars",
+    "week": 1,
+    "score": null,
+    "set_scores": null,
+    "completed": false,
+    "timestamp": null
+  },
+  {
+    "match_id": "bc760908",
+    "team_a": "Blossom",
+    "team_b": "Tekkai",
+    "week": 1,
+    "score": [
+      3,
+      0
+    ],
+    "set_scores": [
+      "25:10",
+      "25:9",
+      "25:8"
+    ],
+    "completed": true,
+    "timestamp": "2025-08-19T14:21:19.568805"
+  },
+  {
+    "match_id": "65ab2e73",
+    "team_a": "ENHYPEN",
+    "team_b": "XIII",
+    "week": 1,
+    "score": null,
+    "set_scores": null,
+    "completed": false,
+    "timestamp": null
+  },
+  {
+    "match_id": "5340182f",
+    "team_a": "Wandenreich",
+    "team_b": "Tekkai",
+    "week": 1,
+    "score": [
+      3,
+      0
+    ],
+    "set_scores": [
+      "25:20",
+      "25:10",
+      "25:5"
+    ],
+    "completed": true,
+    "timestamp": "2025-08-19T14:21:30.855337"
   }
 ]

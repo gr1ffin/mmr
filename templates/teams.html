@@ -17,6 +17,8 @@
             <div class="card-body">
                 <div class="row">
                     {% for team in teams %}
+                    {% set placement_needed = team.placement_matches | default(10) %}
+                    {% set provisional = (team.matches_played | default(0)) < placement_needed %}
                     <div class="col-md-6 col-lg-4 mb-4">
                         <div class="card team-card h-100">
                             <div class="card-body text-center">
@@ -30,9 +32,14 @@
                                     {% endif %}
                                 </div>
                                 <h5 class="card-title">{{ team.name }}</h5>
-                                <div class="mb-3">
-                                    <span class="mmr-badge">{{ team.mmr }}</span>
+                                <div class="mb-2">
+                                    <span class="mmr-badge">{{ 'TBD' if provisional else (team.mmr | round(1)) }}</span>
                                 </div>
+                                {% if provisional %}
+                                <div class="mb-2">
+                                    <span class="badge bg-warning text-dark">Provisional</span>
+                                </div>
+                                {% endif %}
                                 <div class="row text-center mb-3">
                                     <div class="col-6">
                                         <h6 class="text-muted">Rank</h6>
@@ -79,7 +86,7 @@
         <div class="card text-center">
             <div class="card-body">
                 <i class="fas fa-trophy fa-2x text-warning mb-2"></i>
-                <h4>{{ teams[0].mmr if teams else 0 }}</h4>
+                <h4>{{ (teams[0].mmr if teams else 0) | round(1) }}</h4>
                 <p class="text-muted mb-0">Highest MMR</p>
             </div>
         </div>
@@ -88,7 +95,7 @@
         <div class="card text-center">
             <div class="card-body">
                 <i class="fas fa-chart-line fa-2x text-success mb-2"></i>
-                <h4>{{ (teams|map(attribute='mmr')|map('int')|sum / teams|length)|round(1) if teams else 0 }}</h4>
+                <h4>{{ (teams|map(attribute='mmr')|sum / teams|length)|round(1) if teams else 0 }}</h4>
                 <p class="text-muted mb-0">Average MMR</p>
             </div>
         </div>

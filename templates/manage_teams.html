@@ -231,6 +231,11 @@
                             onclick="deleteTeam('{{ team.name }}')">
                         <i class="fas fa-trash me-2"></i>Delete Team
                     </button>
+                    <!-- New: Force Recalculate All MMR -->
+                    <button type="button" class="btn btn-secondary"
+                            onclick="forceRecalculateAll()">
+                        <i class="fas fa-sync-alt me-2"></i>Force Recalculate All MMR
+                    </button>
                 </div>
             </div>
         </div>
@@ -315,6 +320,24 @@ function deleteTeam(teamName) {
                 alert('Error deleting team');
             }
         });
+    }
+}
+
+// New: Force recalculate all MMR
+function forceRecalculateAll() {
+    if (confirm('Force recalculate MMR for all teams from full match history? This may take a moment.')) {
+        fetch('/admin/recalculate_mmr', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error recalculating MMR');
+            }
+        }).catch(() => alert('Error recalculating MMR'));
     }
 }
 </script>

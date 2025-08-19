@@ -49,16 +49,18 @@
                                 <td>
                                     <div class="d-flex align-items-center">
                                         <div class="me-3">
-                                            {% if loop.index == 1 %}
-                                                <i class="fas fa-medal text-warning fs-4"></i>
-                                            {% elif loop.index <= 3 %}
-                                                <i class="fas fa-medal text-secondary fs-4"></i>
+                                            {% if team.logo %}
+                                                <img src="{{ team.logo }}" alt="{{ team.name }} logo" class="rounded" style="width:32px;height:32px;object-fit:cover;">
                                             {% else %}
-                                                <i class="fas fa-user-friends text-muted"></i>
+                                                <div class="d-flex align-items-center justify-content-center bg-light rounded" style="width:32px;height:32px;">
+                                                    <i class="fas fa-shield-alt text-muted"></i>
+                                                </div>
                                             {% endif %}
                                         </div>
                                         <div>
-                                            <h6 class="mb-0">{{ team.name }}</h6>
+                                            <h6 class="mb-0">
+                                                <a href="{{ url_for('team_detail', team_name=team.name) }}" class="text-decoration-none">{{ team.name }}</a>
+                                            </h6>
                                             <small class="text-muted">ID: {{ loop.index }}</small>
                                         </div>
                                     </div>
