@@ -450,7 +450,15 @@ def generate_matches():
 def manage_matches():
     """Manage existing matches and generate new ones via preview/publish."""
     matches = mmr_system.matches
-    active_teams = [t.name for t in mmr_system.teams if t.active]
+    active_teams = [
+        {
+            "name": t.name,
+            "mmr": t.mmr,
+            "logo": t.logo,
+            "hexcolor": t.hexcolor
+        }
+        for t in mmr_system.teams if t.active
+    ]
     return render_template('manage_matches.html', matches=matches, active_teams=active_teams, current_week=mmr_system.current_week)
 
 @app.route('/create_team', methods=['GET', 'POST'])

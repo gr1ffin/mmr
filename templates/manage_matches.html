@@ -138,10 +138,15 @@
     const optBlank = document.createElement('option');
     optBlank.value = ''; optBlank.textContent = '-- Select Team --';
     sel.appendChild(optBlank);
-    activeTeams.forEach(t => {
+    activeTeams.forEach(team => {
       const o = document.createElement('option');
-      o.value = t; o.textContent = t;
-      if (selected && selected === t) o.selected = true;
+      o.value = team.name;
+      o.innerHTML = `
+        <div style="display: flex; align-items: center;">
+          <img src="${team.logo}" alt="${team.name} Logo" style="width: 20px; height: 20px; border-radius: 50%; margin-right: 8px;">
+          <span>${team.name} (MMR: ${team.mmr})</span>
+        </div>`;
+      if (selected && selected === team.name) o.selected = true;
       sel.appendChild(o);
     });
     return sel;
