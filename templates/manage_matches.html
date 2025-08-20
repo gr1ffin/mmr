@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Matches - Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col d-flex gap-2">
+    <a href="{{ url_for('admin_panel') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-1"></i>Admin Panel</a>
+    <button id="btn-generate" class="btn btn-success"><i class="fas fa-calendar-plus me-1"></i>Generate</button>
+    <a href="{{ url_for('match_setup') }}" class="btn btn-outline-primary"><i class="fas fa-sliders-h me-1"></i>Match Setup</a>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h3 class="mb-0"><i class="fas fa-magic me-2"></i>Generate Weekly Matches (Preview First)</h3>
+    <span class="text-muted">Week {{ current_week }}</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-sm-4 col-md-3">
+        <label for="matchesPerTeam" class="form-label">Matches per team</label>
+        <input type="number" min="1" step="1" class="form-control" id="matchesPerTeam" value="1">
+      </div>
+      <div class="col-sm-8 col-md-9 d-flex gap-2">
+        <button id="btn-preview" class="btn btn-primary"><i class="fas fa-eye me-1"></i>Generate Preview</button>
+        <button id="btn-publish" class="btn btn-success" disabled><i class="fas fa-bullhorn me-1"></i>Publish</button>
+        <button id="btn-clear" class="btn btn-outline-secondary" disabled><i class="fas fa-eraser me-1"></i>Clear</button>
+      </div>
+    </div>
+
+    <div id="previewContainer" class="mt-3" style="display:none;">
+      <div class="alert alert-info" id="previewInfo"></div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width:50%">Team A</th>
+              <th style="width:50%">Team B</th>
+            </tr>
+          </thead>
+          <tbody id="previewBody">
+            <!-- rows injected here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="previewErrors" class="mt-3" style="display:none;"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h3 class="mb-0"><i class="fas fa-gamepad me-2"></i>Manage Matches</h3>
+    <span class="text-muted">Total: {{ matches|length }}</span>
+  </div>
+  <div class="card-body">
+    {% if matches %}
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Week</th>
+            <th>Match ID</th>
+            <th>Team A</th>
+            <th>Score</th>
+            <th>Team B</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for match in matches %}
+          <tr>
+            <td>{{ match.week }}</td>
+            <td><code>{{ match.match_id }}</code></td>
+            <td>{{ match.team_a }}</td>
+            <td>
+              {% if match.score %}
+                <span class="badge bg-success">{{ match.score[0] }}-{{ match.score[1] }}</span>
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td>{{ match.team_b }}</td>
+            <td>
+              <span class="badge bg-{{ 'success' if match.completed else 'warning' }}">
+                {{ 'Completed' if match.completed else 'Pending' }}
+              </span>
+            </td>
+            <td>
+              <div class="btn-group" role="group">
+                <a href="{{ url_for('match_detail', match_id=match.match_id) }}" class="btn btn-sm btn-outline-primary" title="View Details">
+                  <i class="fas fa-eye"></i>
+                </a>
+                <a href="{{ url_for('input_result', match_id=match.match_id) }}" class="btn btn-sm btn-{{ 'warning' if match.completed else 'success' }}" title="{{ 'Edit Result' if match.completed else 'Input Result' }}">
+                  <i class="fas fa-edit"></i>
+                </a>
+                <form method="POST" action="{{ url_for('delete_match', match_id=match.match_id) }}" onsubmit="return confirm('Delete this match?');">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="text-muted mb-0">No matches found.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function(){
+  const activeTeams = {{ active_teams|tojson }};
+  const currentWeek = {{ current_week|int }};
+  const previewUrl = {{ url_for('admin_match_setup_preview')|tojson }};
+  const commitUrl = {{ url_for('admin_match_setup_commit')|tojson }};
+
+  const btnGenerate = document.getElementById('btn-generate');
+  const btnPreview = document.getElementById('btn-preview');
+  const btnPublish = document.getElementById('btn-publish');
+  const btnClear = document.getElementById('btn-clear');
+  const matchesPerTeamEl = document.getElementById('matchesPerTeam');
+  const container = document.getElementById('previewContainer');
+  const body = document.getElementById('previewBody');
+  const info = document.getElementById('previewInfo');
+  const errBox = document.getElementById('previewErrors');
+
+  function makeTeamSelect(selected) {
+    const sel = document.createElement('select');
+    sel.className = 'form-select';
+    const optBlank = document.createElement('option');
+    optBlank.value = ''; optBlank.textContent = '-- Select Team --';
+    sel.appendChild(optBlank);
+    activeTeams.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      if (selected && selected === t) o.selected = true;
+      sel.appendChild(o);
+    });
+    return sel;
+  }
+
+  function renderRows(pairs, totalRows) {
+    body.innerHTML = '';
+    for (let i = 0; i < totalRows; i++) {
+      const tr = document.createElement('tr');
+      const tdA = document.createElement('td');
+      const tdB = document.createElement('td');
+      const pair = i < pairs.length ? pairs[i] : {team_a: '', team_b: ''};
+      tdA.appendChild(makeTeamSelect(pair.team_a));
+      tdB.appendChild(makeTeamSelect(pair.team_b));
+      tr.appendChild(tdA);
+      tr.appendChild(tdB);
+      body.appendChild(tr);
+    }
+    container.style.display = '';
+    btnPublish.disabled = false;
+    btnClear.disabled = false;
+  }
+
+  async function doPreview() {
+    errBox.style.display = 'none';
+    errBox.innerHTML = '';
+    const k = parseInt(matchesPerTeamEl.value || '1', 10);
+    if (!(k >= 1)) {
+      alert('Enter a valid number for matches per team');
+      return;
+    }
+    // Desired pairs (floored): n*k/2
+    const n = activeTeams.length;
+    const desiredPairs = Math.floor((n * k) / 2);
+    info.textContent = `Attempting to generate up to ${desiredPairs} matches for ${n} active team(s), Week ${currentWeek}.`;
+    try {
+      const resp = await fetch(previewUrl, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ matches_per_team: k }) });
+      if (!resp.ok) {
+        const e = await resp.json().catch(()=>({message: resp.statusText}));
+        throw new Error(e.message || 'Preview failed');
+      }
+      const data = await resp.json();
+      const pairs = Array.isArray(data.matches) ? data.matches : [];
+      renderRows(pairs, desiredPairs);
+    } catch (e) {
+      errBox.className = 'alert alert-danger';
+      errBox.textContent = e.message || String(e);
+      errBox.style.display = '';
+    }
+  }
+
+  async function doPublish() {
+    const rows = Array.from(body.querySelectorAll('tr'));
+    const payload = [];
+    const seen = new Set();
+    for (const tr of rows) {
+      const [selA, selB] = tr.querySelectorAll('select');
+      const a = selA.value.trim();
+      const b = selB.value.trim();
+      if (!a && !b) continue; // allow blank rows
+      if (!a || !b) {
+        // simple UI validation; backend also validates
+        return alert('All non-empty rows must have both teams selected.');
+      }
+      if (a === b) return alert('A team cannot play itself.');
+      const key = [a,b].sort().join('::');
+      if (seen.has(key)) return alert(`Duplicate pair detected: ${a} vs ${b}`);
+      seen.add(key);
+      payload.push({team_a: a, team_b: b});
+    }
+    if (!payload.length) {
+      return alert('Nothing to publish.');
+    }
+    try {
+      btnPublish.disabled = true;
+      const resp = await fetch(commitUrl, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ matches: payload }) });
+      const data = await resp.json().catch(()=>({success:false,message:'Invalid response'}));
+      if (!resp.ok || !data.success) {
+        const lines = (data.errors || []).join('\n');
+        throw new Error(`${data.message || 'Commit failed'}${lines ? '\n'+lines : ''}`);
+      }
+      // Reload to show the newly created matches
+      window.location.reload();
+    } catch (e) {
+      alert(e.message || String(e));
+      btnPublish.disabled = false;
+    }
+  }
+
+  function clearPreview() {
+    body.innerHTML = '';
+    container.style.display = 'none';
+    btnPublish.disabled = true;
+    btnClear.disabled = true;
+  }
+
+  btnPreview.addEventListener('click', doPreview);
+  btnGenerate.addEventListener('click', doPreview);
+  btnPublish.addEventListener('click', doPublish);
+  btnClear.addEventListener('click', clearPreview);
+})();
+</script>
+{% endblock %}

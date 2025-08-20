@@ -19,7 +19,7 @@
 
 <div class="row">
     <!-- Current Standings (Top 5) -->
-    <div class="col-lg-8 mb-4">
+    <div class="col-12 mb-4">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
@@ -35,7 +35,7 @@
                                 <th>Rank</th>
                                 <th>Team</th>
                                 <th>MMR</th>
-                                <th>Matches</th>
+                                <th>Record</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -48,14 +48,32 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('team_detail', team_name=team.name) }}" class="text-decoration-none">
-                                        {{ team.name }}
-                                    </a>
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            {% if team.logo %}
+                                                <img src="{{ team.logo }}" alt="{{ team.name }} logo" class="rounded" style="width:32px;height:32px;object-fit:cover;">
+                                            {% else %}
+                                                <div class="d-flex align-items-center justify-content-center bg-light rounded" style="width:32px;height:32px;">
+                                                    <i class="fas fa-shield-alt text-muted"></i>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">
+                                                <a href="{{ url_for('team_detail', team_name=team.name) }}" class="text-decoration-none">{{ team.name }}</a>
+                                            </h6>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="mmr-badge">{{ team.mmr }}</span>
                                 </td>
-                                <td>{{ team.matches_played }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-primary me-2">{{ team.wins }} - {{ team.losses }}</span>
+                                        <small class="text-muted">(W-L)</small>
+                                    </div>
+                                </td>
                                 <td>
                                     <span class="badge bg-{{ 'success' if team.active else 'danger' }}">
                                         {{ 'Active' if team.active else 'Inactive' }}
@@ -65,54 +83,6 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-bolt me-2"></i>Quick Actions
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <button id="refreshDataBtn" class="btn btn-success" onclick="refreshData()">
-                        <i class="fas fa-sync-alt me-2"></i>Refresh Data
-                    </button>
-                    <a href="{{ url_for('admin_login') }}" class="btn btn-primary">
-                        <i class="fas fa-lock me-2"></i>Admin Access
-                    </a>
-                    <a href="{{ url_for('matches') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-gamepad me-2"></i>View All Matches
-                    </a>
-                    <a href="{{ url_for('teams') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-users me-2"></i>Manage Teams
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Stats -->
-        <div class="card mt-3">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>Quick Stats
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-6">
-                        <h4 class="text-primary">{{ teams|length }}</h4>
-                        <small class="text-muted">Total Teams</small>
-                    </div>
-                    <div class="col-6">
-                        <h4 class="text-success">{{ matches|length }}</h4>
-                        <small class="text-muted">Total Matches</small>
-                    </div>
                 </div>
             </div>
         </div>
@@ -247,51 +217,4 @@
 </div>
 {% endif %}
 
-<script>
-function refreshData() {
-    // Show loading state
-    const btn = document.getElementById('refreshDataBtn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
-    btn.disabled = true;
-    
-    // Make AJAX request to refresh endpoint
-    fetch('/admin/refresh_data', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show success message
-            btn.innerHTML = '<i class="fas fa-check me-2"></i>Refreshed!';
-            btn.className = 'btn btn-success';
-            
-            // Reload the page after a short delay to show updated data
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        } else {
-            // Show error message
-            btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
-            btn.className = 'btn btn-danger';
-        }
-    })
-    .catch(error => {
-        // Show error message
-        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
-        btn.className = 'btn btn-danger';
-    })
-    .finally(() => {
-        // Reset button after a delay
-        setTimeout(() => {
-            btn.innerHTML = originalText;
-            btn.className = 'btn btn-success';
-            btn.disabled = false;
-        }, 3000);
-    });
-}
-</script>
 {% endblock %}

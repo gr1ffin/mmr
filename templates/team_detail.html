@@ -107,14 +107,10 @@
                 {% if team.roster %}
                 <div class="list-group">
                     {% for player in team.roster %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div class="list-group-item d-flex align-items-center">
                         <div>
                             <h6 class="mb-1">{{ player.name }}</h6>
                             <small class="text-muted">{{ player.role if player.role else 'Player' }}</small>
-                        </div>
-                        <div class="text-end">
-                            <span class="badge bg-primary me-2">{{ player.matches_played if player.matches_played else 0 }}</span>
-                            <small class="text-muted">matches</small>
                         </div>
                     </div>
                     {% endfor %}
@@ -142,8 +138,9 @@
                 {% if matches %}
                 <div class="timeline">
                     {% for match in matches %}
+                    {% set won = match.completed and ((match.team_a == team.name and match.score and match.score[0] > match.score[1]) or (match.team_b == team.name and match.score and match.score[1] > match.score[0])) %}
                     <div class="timeline-item mb-3">
-                        <div class="card {{ 'border-success' if (match.team_a == team.name and match.score and match.score[0] > match.score[1]) or (match.team_b == team.name and match.score and match.score[1] > match.score[0]) else 'border-danger' if match.completed else 'border-warning' }}">
+                        <div class="card {{ 'border-success' if won else ('border-danger' if match.completed else 'border-warning') }}">
                             <div class="card-body">
                                 <div class="row align-items-center">
                                     <div class="col-md-4">
@@ -154,7 +151,7 @@
                                         <div class="text-center">
                                             <strong>{{ match.team_a }}</strong>
                                             {% if match.score %}
-                                                <span class="badge bg-{{ 'success' if match.score[0] > match.score[1] else 'danger' }} mx-2">
+                                                <span class="badge bg-{{ 'success' if won else 'danger' }} mx-2">
                                                     {{ match.score[0] }}-{{ match.score[1] }}
                                                 </span>
                                             {% else %}
@@ -173,10 +170,14 @@
                                     </div>
                                     <div class="col-md-3 text-end">
                                         {% if match.completed %}
-                                            {% if (match.team_a == team.name and match.score and match.score[0] > match.score[1]) or (match.team_b == team.name and match.score and match.score[1] > match.score[0]) %}
+                                            {% if won %}
                                                 <span class="badge bg-success">Victory</span>
                                             {% else %}
                                                 <span class="badge bg-danger">Defeat</span>
+                                            {% endif %}
+                                            {% set delta = mmr_changes.get(match.match_id) if mmr_changes else None %}
+                                            {% if delta is not none %}
+                                                <span class="badge ms-1 bg-{{ 'success' if delta >= 0 else 'danger' }}">{{ '+' if delta >= 0 else '' }}{{ delta }} MMR</span>
                                             {% endif %}
                                         {% else %}
                                             <span class="badge bg-warning">Pending</span>

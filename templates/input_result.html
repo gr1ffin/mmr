@@ -3,85 +3,47 @@
 {% block title %}Input Match Result - MMR Competitive Ladder{% endblock %}
 
 {% block content %}
-<style> 
-    .setcenter { 
-        text-align: center;
-    }
-
-    .set-scores {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
-    }
-
-    .set-scores input {
-        width: 60px;
-        text-align: center;
-    }
+<style>
+    .setcenter { text-align: center; }
+    .set-scores { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: .5rem; }
+    .set-scores input { width: 70px; text-align: center; }
 </style>
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header">
-                <h3 class="mb-0">
-                    <i class="fas fa-edit me-2"></i>Input Match Result
-                </h3>
-                <p class="text-muted mb-0 mt-2">Record the outcome of {{ match.team_a }} vs {{ match.team_b }}</p>
+                <h3 class="mb-0"><i class="fas fa-edit me-2"></i>Input Match Result</h3>
+                <p class="text-muted mb-0 mt-2">Record or edit the outcome of {{ match.team_a }} vs {{ match.team_b }}</p>
             </div>
             <div class="card-body">
                 <!-- Match Info -->
-                <div class="alert alert-info">
-                    <h6 class="alert-heading">
-                        <i class="fas fa-info-circle me-2"></i>Match Information
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <strong>Match ID:</strong> <code>{{ match.match_id }}</code><br>
-                            <strong>Week:</strong> {{ match.week }}<br>
-                            <strong>Status:</strong> 
-                            <span class="badge bg-{{ 'success' if match.completed else 'warning' }}">
-                                {{ 'Completed' if match.completed else 'Pending' }}
-                            </span>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Team A:</strong> {{ match.team_a }}<br>
-                            <strong>Team B:</strong> {{ match.team_b }}<br>
-                            <strong>Type:</strong> Regular Season Match
-                        </div>
-                    </div>
-                </div>
-
                 {% if match.completed %}
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    This match has already been completed. You cannot modify the result.
+                    This match is already completed. Saving will overwrite the previous result.
                 </div>
-                {% else %}
-                <!-- Result Input Form -->
+                {% endif %}
+
                 <form method="POST">
                     <!-- Sets Won Section - Two equal boxes side by side -->
                     <div class="row mb-4">
                         <!-- Team A Sets Won -->
                         <div class="col-md-6">
-                            <div class="card border-primary h-100">
-                                <div class="card-header bg-primary text-white text-center">
-                                    <h5 class="mb-0">
-                                        <i class="fas fa-user me-2"></i>{{ match.team_a }}
-                                    </h5>
+                            <div class="card h-100" style="border-color: {{ (team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd') }};">
+                                <div class="card-header text-white text-center" style="background-color: {{ (team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd') }};">
+                                    <div class="d-flex align-items-center justify-content-center">
+                                        {% if team_a and team_a.logo %}
+                                            <img src="{{ team_a.logo }}" alt="{{ match.team_a }} logo" class="rounded me-2" style="width:28px;height:28px;object-fit:cover;">
+                                        {% else %}
+                                            <span class="rounded-circle bg-light me-2" style="display:inline-block;width:28px;height:28px;"></span>
+                                        {% endif %}
+                                        <h5 class="mb-0">{{ match.team_a }}</h5>
+                                    </div>
                                 </div>
                                 <div class="card-body text-center">
                                     <div class="mb-3">
-                                        <label for="score_a" class="form-label">
-                                            <strong>Sets Won</strong>
-                                        </label>
-                                        <input type="number" 
-                                               class="form-control form-control-lg text-center" 
-                                               id="score_a" 
-                                               name="score_a" 
-                                               min="0" 
-                                               max="3" 
-                                               required
-                                               placeholder="0-3">
+                                        <label for="score_a" class="form-label"><strong>Sets Won</strong></label>
+                                        <input type="number" class="form-control form-control-lg text-center" id="score_a" name="score_a" min="0" max="3" required placeholder="0-3" value="{{ match.score[0] if match.score else '' }}">
                                         <div class="form-text">Number of sets won (0-3, first to 3 wins)</div>
                                     </div>
                                 </div>
@@ -90,25 +52,21 @@
 
                         <!-- Team B Sets Won -->
                         <div class="col-md-6">
-                            <div class="card border-success h-100">
-                                <div class="card-header bg-success text-white text-center">
-                                    <h5 class="mb-0">
-                                        <i class="fas fa-user me-2"></i>{{ match.team_b }}
-                                    </h5>
+                            <div class="card h-100" style="border-color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">
+                                <div class="card-header text-white text-center" style="background-color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">
+                                    <div class="d-flex align-items-center justify-content-center">
+                                        {% if team_b and team_b.logo %}
+                                            <img src="{{ team_b.logo }}" alt="{{ match.team_b }} logo" class="rounded me-2" style="width:28px;height:28px;object-fit:cover;">
+                                        {% else %}
+                                            <span class="rounded-circle bg-light me-2" style="display:inline-block;width:28px;height:28px;"></span>
+                                        {% endif %}
+                                        <h5 class="mb-0">{{ match.team_b }}</h5>
+                                    </div>
                                 </div>
                                 <div class="card-body text-center">
                                     <div class="mb-3">
-                                        <label for="score_b" class="form-label">
-                                            <strong>Sets Won</strong>
-                                        </label>
-                                        <input type="number" 
-                                               class="form-control form-control-lg text-center" 
-                                               id="score_b" 
-                                               name="score_b" 
-                                               min="0" 
-                                               max="3" 
-                                               required
-                                               placeholder="0-3">
+                                        <label for="score_b" class="form-label"><strong>Sets Won</strong></label>
+                                        <input type="number" class="form-control form-control-lg text-center" id="score_b" name="score_b" min="0" max="3" required placeholder="0-3" value="{{ match.score[1] if match.score else '' }}">
                                         <div class="form-text">Number of sets won (0-3, first to 3 wins)</div>
                                     </div>
                                 </div>
@@ -116,65 +74,32 @@
                         </div>
                     </div>
 
-                    <!-- Set Scores Section - Centered box underneath -->
+                    <!-- Set Scores Section -->
                     <div class="row justify-content-center mb-4">
                         <div class="col-lg-8">
-                            <div class="card border-info">
+                            <div class="card" style="border-color:#0dcaf0;">
                                 <div class="card-header bg-info text-white text-center">
-                                    <h5 class="mb-0">
-                                        <i class="fas fa-list-ol me-2"></i>Individual Set Scores
-                                    </h5>
+                                    <h5 class="mb-0"><i class="fas fa-list-ol me-2"></i>Individual Set Scores</h5>
                                 </div>
                                 <div class="card-body">
                                     <div class="row mb-2">
-                                        <div class="col-6 text-center">
-                                            <small class="text-muted fw-bold">{{ match.team_a }}</small>
+                                        <div class="col-6 text-center"><small class="text-muted fw-bold">{{ match.team_a }}</small></div>
+                                        <div class="col-6 text-center"><small class="text-muted fw-bold">{{ match.team_b }}</small></div>
+                                    </div>
+
+                                    {% for i in range(1,6) %}
+                                        {% set s = (match.set_scores[i-1] if match.set_scores and match.set_scores|length >= i else None) %}
+                                        {% set a_val = (s.split(':')[0] if s else '') %}
+                                        {% set b_val = (s.split(':')[1] if s else '') %}
+                                        <div class="set-scores">
+                                            <label class="form-label small setcenter" style="width:60px;">Set {{ i }}</label>
+                                            <input class="form-control" name="set_{{ i }}_a" value="{{ a_val }}">
+                                            <input class="form-control" name="set_{{ i }}_b" value="{{ b_val }}">
                                         </div>
-                                        <div class="col-6 text-center">
-                                            <small class="text-muted fw-bold">{{ match.team_b }}</small>
-                                        </div>
-                                    </div>
-
-                                    <!-- Set 1 -->
-                                    <div class="set-scores">
-                                        <label class="form-label small setcenter">Set 1</label>
-                                        <input type="number" class="form-control" name="set_1_a" min="0" max="25">
-                                        <input type="number" class="form-control" name="set_1_b" min="0" max="25">
-                                    </div>
-
-                                    <!-- Set 2 -->
-                                    <div class="set-scores">
-                                        <label class="form-label small setcenter">Set 2</label>
-                                        <input type="number" class="form-control" name="set_2_a" min="0" max="25">
-                                        <input type="number" class="form-control" name="set_2_b" min="0" max="25">
-                                    </div>
-
-                                    <!-- Set 3 -->
-                                    <div class="set-scores">
-                                        <label class="form-label small setcenter">Set 3</label>
-                                        <input type="number" class="form-control" name="set_3_a" min="0" max="25">
-                                        <input type="number" class="form-control" name="set_3_b" min="0" max="25">
-                                    </div>
-
-                                    <!-- Set 4 (Optional) -->
-                                    <div class="set-scores">
-                                        <label class="form-label small setcenter">Set 4</label>
-                                        <input type="number" class="form-control" name="set_4_a" min="0" max="25">
-                                        <input type="number" class="form-control" name="set_4_b" min="0" max="25">
-                                    </div>
-
-                                    <!-- Set 5 (Optional) -->
-                                    <div class="set-scores">
-                                        <label class="form-label small setcenter">Set 5</label>
-                                        <input type="number" class="form-control" name="set_5_a" min="0" max="25">
-                                        <input type="number" class="form-control" name="set_5_b" min="0" max="25">
-                                    </div>
+                                    {% endfor %}
 
                                     <div class="text-center">
-                                        <small class="text-muted">
-                                            <i class="fas fa-info-circle me-1"></i>
-                                            Left column: {{ match.team_a }} | Right column: {{ match.team_b }}
-                                        </small>
+                                        <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Left column: {{ match.team_a }} | Right column: {{ match.team_b }}</small>
                                     </div>
                                 </div>
                             </div>
@@ -183,50 +108,34 @@
 
                     <!-- Form Actions -->
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-                        <a href="{{ url_for('match_detail', match_id=match.match_id) }}" 
-                           class="btn btn-secondary me-md-2">
-                            <i class="fas fa-arrow-left me-2"></i>Cancel
-                        </a>
-                        <button type="submit" class="btn btn-success">
-                            <i class="fas fa-save me-2"></i>Record Result
-                        </button>
+                        <a href="{{ url_for('match_detail', match_id=match.match_id) }}" class="btn btn-secondary me-md-2"><i class="fas fa-arrow-left me-2"></i>Cancel</a>
+                        <button type="submit" class="btn btn-success"><i class="fas fa-save me-2"></i>Save Result</button>
                     </div>
                 </form>
-                {% endif %}
             </div>
         </div>
 
         <!-- Help Section -->
         <div class="card mt-4">
             <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="fas fa-question-circle me-2"></i>How to Input Results
-                </h6>
+                <h6 class="mb-0"><i class="fas fa-question-circle me-2"></i>How to Input Results</h6>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
                         <h6>Sets Won:</h6>
                         <ul class="small">
-                            <li>Count individual set victories</li>
                             <li>Best of 5 format (0-3 range)</li>
-                            <li>Example: 3-1 means Team A won 3 sets, Team B won 1</li>
                             <li>First team to win 3 sets wins the match</li>
                         </ul>
                     </div>
                     <div class="col-md-6">
                         <h6>Set Scores:</h6>
                         <ul class="small">
-                            <li>Individual scores for each set</li>
-                            <li>Maximum 25 points per set</li>
-                            <li>Left column: {{ match.team_a }}, Right column: {{ match.team_b }}</li>
-                            <li>Used for point differential bonus calculation</li>
+                            <li>Enter the individual score for each set</li>
+                            <li>Leave both inputs blank if a set was not played</li>
                         </ul>
                     </div>
-                </div>
-                <div class="alert alert-info mt-3">
-                    <strong>Note:</strong> MMR changes are calculated automatically using the Elo formula with 
-                    margin bonuses and point differential adjustments.
                 </div>
             </div>
         </div>
@@ -235,61 +144,4 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-// Real-time MMR change preview
-function calculateMMRChange(scoreA, scoreB, setScores) {
-    const K_FACTOR = 20;
-    const POINT_DIFF_MULTIPLIER = 0.1;
-    const MARGIN_BONUS = {"3,0": 5, "3,1": 3, "3,2": 1};
-
-    let totalWinnerPoints = 0;
-    let totalLoserPoints = 0;
-
-    setScores.forEach(set => {
-        if (set.includes(':')) {
-            const [pointsA, pointsB] = set.split(':').map(Number);
-            if (!isNaN(pointsA) && !isNaN(pointsB)) {
-                totalWinnerPoints += Math.max(pointsA, pointsB);
-                totalLoserPoints += Math.min(pointsA, pointsB);
-            }
-        }
-    });
-
-    const pointDiffBonus = (totalWinnerPoints - totalLoserPoints) * POINT_DIFF_MULTIPLIER;
-    const marginBonus = MARGIN_BONUS[`${scoreA},${scoreB}`] || 0;
-
-    const winnerChange = K_FACTOR + marginBonus + pointDiffBonus;
-    const loserChange = -K_FACTOR;
-
-    return { winnerChange, loserChange };
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const scoreAInput = document.getElementById('score_a');
-    const scoreBInput = document.getElementById('score_b');
-    const setScoreInputs = document.querySelectorAll('[name^="set_"]');
-
-    function updatePreview() {
-        const scoreA = parseInt(scoreAInput.value) || 0;
-        const scoreB = parseInt(scoreBInput.value) || 0;
-        const setScores = Array.from(setScoreInputs).map(input => input.value).filter(Boolean);
-
-        if (setScores.length >= 3) {
-            const { winnerChange, loserChange } = calculateMMRChange(scoreA, scoreB, setScores);
-
-            document.getElementById('mmr_change_a').innerHTML = 
-                `<span class="text-${winnerChange >= 0 ? 'success' : 'danger'}">${winnerChange >= 0 ? '+' : ''}${winnerChange.toFixed(1)}</span>`;
-            document.getElementById('mmr_change_b').innerHTML = 
-                `<span class="text-${loserChange >= 0 ? 'success' : 'danger'}">${loserChange >= 0 ? '+' : ''}${loserChange.toFixed(1)}</span>`;
-        } else {
-            document.getElementById('mmr_change_a').innerHTML = 'Enter scores to see MMR change';
-            document.getElementById('mmr_change_b').innerHTML = 'Enter scores to see MMR change';
-        }
-    }
-
-    [scoreAInput, scoreBInput, ...setScoreInputs].forEach(input => {
-        input.addEventListener('input', updatePreview);
-    });
-});
-</script>
 {% endblock %}

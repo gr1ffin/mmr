@@ -8,6 +8,7 @@ from mmr_system import MMRSystem, Team, Match
 import logging
 import requests
 from werkzeug.middleware.proxy_fix import ProxyFix
+import re
 
 # Configure logging for the web server
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -200,9 +201,16 @@ def matches():
 def teams():
     """Show all teams with placed and provisional separation."""
     teams_sorted = sorted(mmr_system.teams, key=lambda x: x.mmr, reverse=True)
-    placed_teams = [t for t in teams_sorted if t.matches_played >= mmr_system.placement_matches]
-    provisional_teams = [t for t in teams_sorted if t.matches_played < mmr_system.placement_matches]
-    return render_template('teams.html', teams=teams_sorted, placed_teams=placed_teams, provisional_teams=provisional_teams, placement_matches=mmr_system.placement_matches)
+    # Ensure provisional flags reflect matches played vs placement threshold
+    changed = False
+    for t in teams_sorted:
+        desired = t.matches_played < mmr_system.placement_matches
+        if getattr(t, 'provisional', desired) != desired:
+            t.provisional = desired
+            changed = True
+    if changed:
+        mmr_system.save_data()
+    return render_template('teams.html', teams=teams_sorted)
 
 @app.route('/team/<team_name>')
 def team_detail(team_name):
@@ -251,7 +259,31 @@ def team_detail(team_name):
     except StopIteration:
         rank = None
 
-    return render_template('team_detail.html', team=team, matches=team_matches, display_mmr=display_mmr, win_rate=win_rate, avg_points=avg_points, rank=rank, placement_matches=mmr_system.placement_matches)
+    # Compute per-match MMR change for this team from history entries
+    def mmr_delta_for_match(m: Match) -> Optional[int]:
+        if not m.completed or not m.score:
+            return None
+        opp = m.team_b if m.team_a == team.name else m.team_a
+        a_sets, b_sets = m.score
+        if m.team_a == team.name:
+            my_sets, opp_sets = a_sets, b_sets
+        else:
+            my_sets, opp_sets = b_sets, a_sets
+        won = my_sets > opp_sets
+        phrase = f"Won {my_sets}-{opp_sets} vs {opp}" if won else f"Lost {my_sets}-{opp_sets} vs {opp}"
+        for entry in reversed(team.history or []):
+            if phrase in entry:
+                mobj = re.search(r"([+-]\\d+)\\s*MMR", entry)
+                if mobj:
+                    try:
+                        return int(mobj.group(1))
+                    except Exception:
+                        return None
+        return None
+
+    mmr_changes: Dict[str, Optional[int]] = {m.match_id: mmr_delta_for_match(m) for m in team_matches}
+
+    return render_template('team_detail.html', team=team, matches=team_matches, display_mmr=display_mmr, win_rate=win_rate, avg_points=avg_points, rank=rank, placement_matches=mmr_system.placement_matches, mmr_changes=mmr_changes)
 
 @app.route('/admin_login', methods=['GET', 'POST'])
 def admin_login():
@@ -280,6 +312,20 @@ def manage_teams():
     """Manage team rosters."""
     teams = mmr_system.teams
     return render_template('manage_teams.html', teams=teams)
+
+@app.route('/generate_matches', methods=['GET', 'POST'])
+@admin_required
+def generate_matches():
+    """Deprecated: redirect to Manage Matches which now handles preview/publish."""
+    return redirect(url_for('manage_matches'))
+
+@app.route('/manage_matches')
+@admin_required
+def manage_matches():
+    """Manage existing matches and generate new ones via preview/publish."""
+    matches = mmr_system.matches
+    active_teams = [t.name for t in mmr_system.teams if t.active]
+    return render_template('manage_matches.html', matches=matches, active_teams=active_teams, current_week=mmr_system.current_week)
 
 @app.route('/create_team', methods=['GET', 'POST'])
 @admin_required
@@ -324,23 +370,6 @@ def create_team():
 
     return render_template('create_team.html')
 
-@app.route('/generate_matches', methods=['GET', 'POST'])
-@admin_required
-def generate_matches():
-    """Generate new week of matches"""
-    if request.method == 'POST':
-        try:
-            matches_per_team = int(request.form.get('matches_per_team', 1))
-        except ValueError:
-            matches_per_team = 1
-        new_matches = mmr_system.generate_weekly_matches(matches_per_team)
-        if not new_matches:
-            flash("Could not generate a complete schedule with the current constraints. No matches were created.", 'error')
-        else:
-            flash(f"Generated {len(new_matches)} matches for Week {mmr_system.current_week}.", 'success')
-        return redirect(url_for('matches'))
-    return render_template('generate_matches.html')
-
 @app.route('/match/<match_id>')
 def match_detail(match_id):
     """Show detailed information about a specific match"""
@@ -348,7 +377,35 @@ def match_detail(match_id):
     if not match:
         flash('Match not found!', 'error')
         return redirect(url_for('matches'))
-    return render_template('match_detail.html', match=match)
+    # Resolve team objects
+    team_a = next((t for t in mmr_system.teams if t.name == match.team_a), None)
+    team_b = next((t for t in mmr_system.teams if t.name == match.team_b), None)
+
+    def extract_mmr_delta(team: Team, opponent_name: str, score: Optional[Tuple[int,int]]) -> Optional[int]:
+        if not team or not score:
+            return None
+        a_sets, b_sets = score
+        # Determine expected history phrase for Win/Loss against opponent
+        won = (team.name == match.team_a and a_sets > b_sets) or (team.name == match.team_b and b_sets > a_sets)
+        if team.name == match.team_a:
+            my_sets, opp_sets = a_sets, b_sets
+        else:
+            my_sets, opp_sets = b_sets, a_sets
+        phrase = f"Won {my_sets}-{opp_sets} vs {opponent_name}" if won else f"Lost {my_sets}-{opp_sets} vs {opponent_name}"
+        for entry in reversed(team.history or []):
+            if phrase in entry:
+                m = re.search(r"([+-]\\d+)\\s*MMR", entry)
+                if m:
+                    try:
+                        return int(m.group(1))
+                    except Exception:
+                        return None
+        return None
+
+    mmr_a_delta = extract_mmr_delta(team_a, match.team_b, match.score) if match.completed else None
+    mmr_b_delta = extract_mmr_delta(team_b, match.team_a, match.score) if match.completed else None
+
+    return render_template('match_detail.html', match=match, team_a=team_a, team_b=team_b, mmr_a_delta=mmr_a_delta, mmr_b_delta=mmr_b_delta)
 
 @app.route('/input_result/<match_id>', methods=['GET', 'POST'])
 @admin_required
@@ -359,50 +416,62 @@ def input_result(match_id):
         flash('Match not found!', 'error')
         return redirect(url_for('matches'))
 
+    # Resolve team objects for template visuals
+    team_a_obj = next((t for t in mmr_system.teams if t.name == match.team_a), None)
+    team_b_obj = next((t for t in mmr_system.teams if t.name == match.team_b), None)
+
     if request.method == 'POST':
         try:
             score_a = int(request.form.get('score_a', 0))
             score_b = int(request.form.get('score_b', 0))
         except ValueError:
-            flash('Invalid scores provided.', 'error')
-            return render_template('input_result.html', match=match)
+            flash('Invalid set win totals provided.', 'error')
+            return render_template('input_result.html', match=match, team_a=team_a_obj, team_b=team_b_obj)
 
-        # Collect set scores from form set_1_a/set_1_b ... set_5_a/set_5_b
+        # Basic validation for sets won (best of 5)
+        if not (0 <= score_a <= 3 and 0 <= score_b <= 3 and max(score_a, score_b) == 3 and 3 <= (score_a + score_b) <= 5):
+            flash('Sets won must be between 0 and 3 with one team reaching 3 (best of 5).', 'error')
+            return render_template('input_result.html', match=match, team_a=team_a_obj, team_b=team_b_obj)
+
+        # Collect and validate set scores from form set_1_a/set_1_b ... set_5_a/set_5_b
         set_scores: List[str] = []
         totals_a = 0
         totals_b = 0
-        for i in range(1, 6):
+        for i in range(1, 5 + 1):
             a = request.form.get(f'set_{i}_a')
             b = request.form.get(f'set_{i}_b')
-            if a and b:
-                set_scores.append(f"{a}:{b}")
-                try:
-                    totals_a += int(a)
-                    totals_b += int(b)
-                except ValueError:
-                    pass
+            if a is None and b is None:
+                continue
+            if a == '' and b == '':
+                continue
+            try:
+                ai = int(a) if a not in (None, '') else None
+                bi = int(b) if b not in (None, '') else None
+            except Exception:
+                flash(f'Invalid score in Set {i}. Please enter numbers only.', 'error')
+                return render_template('input_result.html', match=match, team_a=team_a_obj, team_b=team_b_obj)
 
-        # Update MMR
-        team_a = next((t for t in mmr_system.teams if t.name == match.team_a), None)
-        team_b = next((t for t in mmr_system.teams if t.name == match.team_b), None)
-        if not team_a or not team_b:
-            flash('Teams for this match could not be found.', 'error')
-            return render_template('input_result.html', match=match)
+            if ai is None or bi is None:
+                flash(f'Set {i} is incomplete. Provide both scores or leave both blank.', 'error')
+                return render_template('input_result.html', match=match, team_a=team_a_obj, team_b=team_b_obj)
 
-        winner, loser = (team_a, team_b) if score_a > score_b else (team_b, team_a)
-        # Map totals to winner/loser orientation
-        if winner is team_a:
-            pw, pl = totals_a, totals_b
-        else:
-            pw, pl = totals_b, totals_a
-        mmr_system.update_mmr(winner, loser, (score_a, score_b), set_scores=set_scores, points_winner=pw, points_loser=pl)
+            # Allow any non-negative integer values (no upper cap)
+            if ai < 0 or bi < 0:
+                flash(f'Set {i} scores must be non-negative integers.', 'error')
+                return render_template('input_result.html', match=match, team_a=team_a_obj, team_b=team_b_obj)
 
-        # Persist match result
+            set_scores.append(f"{ai}:{bi}")
+            totals_a += ai
+            totals_b += bi
+
+        # Persist match result first
         match.score = (score_a, score_b)
         match.set_scores = set_scores
         match.completed = True
         match.timestamp = datetime.now().isoformat()
-        mmr_system.save_data()
+
+        # Recalculate from full history to avoid double-counting on edits
+        mmr_system.recalculate_all_mmr()
 
         # Notify Discord webhook about the result (best-effort)
         notify_discord_match_result(match, score_a, score_b, set_scores)
@@ -410,7 +479,8 @@ def input_result(match_id):
         flash('Match result updated successfully.', 'success')
         return redirect(url_for('matches'))
 
-    return render_template('input_result.html', match=match)
+    # GET
+    return render_template('input_result.html', match=match, team_a=team_a_obj, team_b=team_b_obj)
 
 @app.route('/delete_match/<match_id>', methods=['POST'])
 @admin_required
@@ -474,12 +544,11 @@ def refresh_data():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/manage_matches')
+@app.route('/match_setup')
 @admin_required
-def manage_matches():
-    """Manage existing matches."""
-    matches = mmr_system.matches
-    return render_template('manage_matches.html', matches=matches)
+def match_setup():
+    """Legacy endpoint now redirects to Manage Matches UI."""
+    return redirect(url_for('manage_matches'))
 
 @app.route('/system_settings', methods=['GET', 'POST'])
 @admin_required
@@ -938,6 +1007,93 @@ def admin_import_team():
         flash('No new teams were imported. Check for duplicates or invalid JSON format.', 'warning')
 
     return redirect(url_for('admin_panel'))
+
+@app.route('/match_setup')
+@admin_required
+def match_setup():
+    """Admin UI to preview and curate weekly matches before committing."""
+    teams = sorted([t for t in mmr_system.teams if t.active], key=lambda t: t.name.lower())
+    return render_template('match_setup.html', teams=teams, current_week=mmr_system.current_week)
+
+@app.route('/admin/match_setup/preview', methods=['POST'])
+@admin_required
+def admin_match_setup_preview():
+    """Return a non-persisted preview of matchups for the current week."""
+    # Accept JSON or form-encoded
+    payload = request.get_json(silent=True) or request.form
+    try:
+        matches_per_team = int(payload.get('matches_per_team', 1))
+    except Exception:
+        return jsonify({
+            'success': False,
+            'message': 'Invalid matches_per_team'
+        }), 400
+    preview = mmr_system.generate_weekly_matches_preview(matches_per_team)
+    # Return simple pairs for UI
+    return jsonify({
+        'success': True,
+        'week': mmr_system.current_week,
+        'matches': [{'team_a': m.team_a, 'team_b': m.team_b} for m in preview]
+    })
+
+@app.route('/admin/match_setup/commit', methods=['POST'])
+@admin_required
+def admin_match_setup_commit():
+    """Persist curated matches for the current week."""
+    data = request.get_json(silent=True)
+    if not data or 'matches' not in data or not isinstance(data['matches'], list):
+        return jsonify({'success': False, 'message': 'Request must include a matches array.'}), 400
+
+    active_names = {t.name for t in mmr_system.teams if t.active}
+    created = 0
+    seen_pairs = set()  # prevent duplicates within payload (unordered)
+    # Build forbidden pairs from all historical matches
+    forbidden_pairs = {frozenset({m.team_a, m.team_b}) for m in mmr_system.matches}
+
+    new_matches: List[Match] = []
+    errors: List[str] = []
+
+    for idx, item in enumerate(data['matches'], start=1):
+        try:
+            a = (item.get('team_a') or '').strip()
+            b = (item.get('team_b') or '').strip()
+        except Exception:
+            errors.append(f'Row {idx}: invalid payload object')
+            continue
+        # Basic validation
+        if not a or not b:
+            errors.append(f'Row {idx}: team names required')
+            continue
+        if a == b:
+            errors.append(f'Row {idx}: a team cannot play itself ({a})')
+            continue
+        if a not in active_names:
+            errors.append(f'Row {idx}: unknown or inactive team A: {a}')
+            continue
+        if b not in active_names:
+            errors.append(f'Row {idx}: unknown or inactive team B: {b}')
+            continue
+        pair = frozenset({a, b})
+        if pair in seen_pairs:
+            errors.append(f'Row {idx}: duplicate pair in submission: {a} vs {b}')
+            continue
+        if pair in forbidden_pairs:
+            errors.append(f'Row {idx}: pair has already played before: {a} vs {b}')
+            continue
+        seen_pairs.add(pair)
+        new_matches.append(Match(a, b, mmr_system.current_week))
+
+    if errors:
+        return jsonify({'success': False, 'message': 'Validation failed', 'errors': errors}), 400
+
+    if not new_matches:
+        return jsonify({'success': False, 'message': 'No valid matches to create.'}), 400
+
+    # Persist
+    mmr_system.matches.extend(new_matches)
+    mmr_system.save_data()
+    created = len(new_matches)
+    return jsonify({'success': True, 'created': created, 'week': mmr_system.current_week})
 
 if __name__ == '__main__':
     # In production use gunicorn. This block is for local/dev usage.

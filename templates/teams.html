@@ -10,36 +10,30 @@
                 <h3 class="mb-0">
                     <i class="fas fa-users me-2"></i>All Teams
                 </h3>
-                <a href="{{ url_for('admin_login') }}" class="btn btn-primary">
-                    <i class="fas fa-lock me-2"></i>Admin Panel
-                </a>
             </div>
             <div class="card-body">
                 <div class="row">
                     {% for team in teams %}
-                    {% set placement_needed = team.placement_matches | default(10) %}
-                    {% set provisional = (team.matches_played | default(0)) < placement_needed %}
                     <div class="col-md-6 col-lg-4 mb-4">
-                        <div class="card team-card h-100">
+                        <div class="card team-card h-100" style="border: 2px solid {{ team.hexcolor if team.hexcolor else '#0d6efd' }};">
                             <div class="card-body text-center">
-                                <div class="mb-3">
-                                    {% if loop.index == 1 %}
-                                        <i class="fas fa-crown fa-3x text-warning"></i>
-                                    {% elif loop.index <= 3 %}
-                                        <i class="fas fa-medal fa-3x text-secondary"></i>
+                                <!-- Team logo and name -->
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    {% if team.logo %}
+                                        <img src="{{ team.logo }}" alt="{{ team.name }} logo" class="rounded me-2" style="width:36px;height:36px;object-fit:cover;border:1px solid rgba(0,0,0,.1);">
                                     {% else %}
-                                        <i class="fas fa-user-friends fa-3x text-primary"></i>
+                                        <span class="rounded-circle bg-light me-2" style="display:inline-block;width:36px;height:36px;border:1px dashed rgba(0,0,0,.15);"></span>
                                     {% endif %}
+                                    <h5 class="card-title mb-0">
+                                        <a href="{{ url_for('team_detail', team_name=team.name) }}" class="text-decoration-none">{{ team.name }}</a>
+                                    </h5>
                                 </div>
-                                <h5 class="card-title">{{ team.name }}</h5>
-                                <div class="mb-2">
-                                    <span class="mmr-badge">{{ 'TBD' if provisional else (team.mmr | round(1)) }}</span>
+                                <div class="mb-3">
+                                    <span class="d-inline-block rounded-circle me-2" style="width:14px;height:14px;background-color: {{ team.hexcolor if team.hexcolor else '#0d6efd' }};"></span>
+                                    <small class="text-muted">{{ team.hexcolor if team.hexcolor else '#0d6efd' }}</small>
                                 </div>
-                                {% if provisional %}
-                                <div class="mb-2">
-                                    <span class="badge bg-warning text-dark">Provisional</span>
-                                </div>
-                                {% endif %}
+
+                                <!-- Rank and Matches only -->
                                 <div class="row text-center mb-3">
                                     <div class="col-6">
                                         <h6 class="text-muted">Rank</h6>
@@ -50,12 +44,8 @@
                                         <h4 class="text-success">{{ team.matches_played }}</h4>
                                     </div>
                                 </div>
-                                <div class="mb-3">
-                                    <span class="badge bg-{{ 'success' if team.active else 'danger' }}">
-                                        <i class="fas fa-{{ 'check-circle' if team.active else 'times-circle' }} me-1"></i>
-                                        {{ 'Active' if team.active else 'Inactive' }}
-                                    </span>
-                                </div>
+
+                                <!-- View roster button -->
                                 <div class="d-grid">
                                     <a href="{{ url_for('team_detail', team_name=team.name) }}" class="btn btn-outline-primary">
                                         <i class="fas fa-eye me-2"></i>View Roster
@@ -94,9 +84,9 @@
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <i class="fas fa-chart-line fa-2x text-success mb-2"></i>
-                <h4>{{ (teams|map(attribute='mmr')|sum / teams|length)|round(1) if teams else 0 }}</h4>
-                <p class="text-muted mb-0">Average MMR</p>
+                <i class="fas fa-arrow-down fa-2x text-danger mb-2"></i>
+                <h4>{{ (teams|map(attribute='mmr')|list|min)|round(1) if teams else 0 }}</h4>
+                <p class="text-muted mb-0">Lowest MMR</p>
             </div>
         </div>
     </div>

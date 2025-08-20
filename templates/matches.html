@@ -12,14 +12,7 @@
                         <i class="fas fa-gamepad me-2"></i>All Matches
                     </h3>
                 </div>
-                <div class="btn-group" role="group">
-                    <button id="refreshMatchesBtn" class="btn btn-success" onclick="refreshMatches()">
-                        <i class="fas fa-sync-alt me-2"></i>Refresh
-                    </button>
-                    <a href="{{ url_for('admin_login') }}" class="btn btn-primary">
-                        <i class="fas fa-lock me-2"></i>Admin Panel
-                    </a>
-                </div>
+                <!-- Removed Refresh and Admin buttons -->
             </div>
             <div class="card-body">
                 {% if matches_by_week %}
@@ -88,14 +81,16 @@
                                                     <i class="fas fa-edit"></i>
                                                 </a>
                                                 {% endif %}
-                                                {% if session.get('is_admin') and match.is_completed %}
-                                                <a href="{{ url_for('input_result', match_id=match.match_id) }}" class="btn btn-sm btn-warning">
-                                                    <i class="fas fa-edit"></i> Edit
+                                                {% if session.get('admin_logged_in') and match.completed %}
+                                                <a href="{{ url_for('input_result', match_id=match.match_id) }}" class="btn btn-sm btn-warning" title="Edit Result">
+                                                    <i class="fas fa-edit"></i>
                                                 </a>
                                                 {% endif %}
-                                                <form method="POST" action="{{ url_for('delete_match', match_id=match.match_id) }}">
+                                                {% if session.get('admin_logged_in') %}
+                                                <form method="POST" action="{{ url_for('delete_match', match_id=match.match_id) }}" onsubmit="return confirm('Delete this match?');">
                                                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                                                 </form>
+                                                {% endif %}
                                             </div>
                                         </td>
                                     </tr>
@@ -110,9 +105,7 @@
                     <i class="fas fa-gamepad fa-4x text-muted mb-3"></i>
                     <h5 class="text-muted">No matches found</h5>
                     <p class="text-muted">Generate some matches to get started!</p>
-                    <a href="{{ url_for('admin_login') }}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Generate Matches
-                    </a>
+                    <!-- Removed Generate Matches button -->
                 </div>
                 {% endif %}
             </div>
@@ -162,51 +155,4 @@
 </div>
 {% endif %}
 
-<script>
-function refreshMatches() {
-    // Show loading state
-    const btn = document.getElementById('refreshMatchesBtn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
-    btn.disabled = true;
-    
-    // Make AJAX request to refresh endpoint
-    fetch('/admin/refresh_data', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show success message
-            btn.innerHTML = '<i class="fas fa-check me-2"></i>Refreshed!';
-            btn.className = 'btn btn-success';
-            
-            // Reload the page after a short delay to show updated data
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        } else {
-            // Show error message
-            btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
-            btn.className = 'btn btn-danger';
-        }
-    })
-    .catch(error => {
-        // Show error message
-        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
-        btn.className = 'btn btn-danger';
-    })
-    .finally(() => {
-        // Reset button after a delay
-        setTimeout(() => {
-            btn.innerHTML = originalText;
-            btn.className = 'btn btn-success';
-            btn.disabled = false;
-        }, 3000);
-    });
-}
-</script>
 {% endblock %}

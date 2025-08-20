@@ -694,6 +694,114 @@ class MMRSystem:
             self.save_data()
         return created
 
+    def generate_weekly_matches_preview(self, matches_per_team: int = 1) -> List['Match']:
+        """Generate a proposed set of matches for the current week without saving.
+        Returns a list of Match objects (with week set to current_week). If a full
+        perfect schedule cannot be found, returns a partial schedule with as many
+        valid pairs as possible so the UI can fill the rest manually.
+        """
+        import random
+        teams = [t for t in self.teams if t.active]
+        n = len(teams)
+        if matches_per_team <= 0 or n < 2:
+            return []
+        total_degree = n * matches_per_team
+        # Forbid pairs that have already played at any prior time
+        forbidden_pairs = {frozenset({m.team_a, m.team_b}) for m in self.matches}
+        names = [t.name for t in teams]
+        counts = {name: 0 for name in names}
+        chosen_pairs: set[frozenset] = set()
+        target_pairs = total_degree // 2  # theoretical max integer pairs
+
+        def available_opponents(a: str) -> List[str]:
+            return [b for b in names
+                    if b != a
+                    and counts[b] < matches_per_team
+                    and frozenset({a, b}) not in forbidden_pairs
+                    and frozenset({a, b}) not in chosen_pairs]
+
+        # First try exact backtracking for a perfect schedule
+        def select_team() -> Optional[str]:
+            candidates = [name for name in names if counts[name] < matches_per_team]
+            if not candidates:
+                return None
+            candidates.sort(key=lambda a: (matches_per_team - counts[a], len(available_opponents(a))))
+            return candidates[0]
+
+        def backtrack() -> bool:
+            if len(chosen_pairs) == target_pairs:
+                return True
+            a = select_team()
+            if a is None:
+                return True
+            ops = available_opponents(a)
+            if not ops:
+                return False
+            random.shuffle(ops)
+            for b in ops:
+                if counts[a] >= matches_per_team or counts[b] >= matches_per_team:
+                    continue
+                pair = frozenset({a, b})
+                chosen_pairs.add(pair)
+                counts[a] += 1
+                counts[b] += 1
+                feasible = True
+                if any(counts[name] > matches_per_team for name in names):
+                    feasible = False
+                if feasible:
+                    for name in names:
+                        if counts[name] < matches_per_team and not available_opponents(name):
+                            feasible = False
+                            break
+                if feasible and backtrack():
+                    return True
+                chosen_pairs.remove(pair)
+                counts[a] -= 1
+                counts[b] -= 1
+            return False
+
+        perfect = backtrack()
+        if not perfect:
+            # Greedy fallback: try to add as many pairs as possible
+            # Reset counts/chosen for a fresh attempt
+            counts = {name: 0 for name in names}
+            chosen_pairs = set()
+            # Build all candidate pairs
+            candidates = []
+            for i, a in enumerate(names):
+                for b in names[i+1:]:
+                    pair = frozenset({a, b})
+                    if pair in forbidden_pairs:
+                        continue
+                    candidates.append((a, b))
+            # Shuffle to avoid bias, then iteratively pick pairs that keep both under the cap
+            random.shuffle(candidates)
+            progress = True
+            while progress and len(chosen_pairs) < target_pairs:
+                progress = False
+                for (a, b) in list(candidates):
+                    if len(chosen_pairs) >= target_pairs:
+                        break
+                    if counts[a] >= matches_per_team or counts[b] >= matches_per_team:
+                        continue
+                    pair = frozenset({a, b})
+                    if pair in chosen_pairs:
+                        continue
+                    # Ensure each side still has at least one other potential opponent afterwards if needed
+                    chosen_pairs.add(pair)
+                    counts[a] += 1
+                    counts[b] += 1
+                    progress = True
+                # Remove exhausted candidates
+                candidates = [(a, b) for (a, b) in candidates if counts[a] < matches_per_team and counts[b] < matches_per_team]
+
+        # Build Match objects from chosen pairs
+        created: List[Match] = []
+        for pair in chosen_pairs:
+            a, b = tuple(pair)
+            created.append(Match(a, b, self.current_week))
+        return created
+
     def get_db_status(self) -> Dict[str, Optional[str]]:
         info: Dict[str, Optional[str]] = {
             'backend': 'sqlite' if self.has_database else 'memory',

@@ -13,9 +13,7 @@
                     </h3>
                     <p class="text-muted mb-0 mt-2">Teams ranked by MMR (Matchmaking Rating)</p>
                 </div>
-                <button id="refreshLeaderboardBtn" class="btn btn-success" onclick="refreshLeaderboard()">
-                    <i class="fas fa-sync-alt me-2"></i>Refresh
-                </button>
+                <!-- Refresh button removed -->
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -38,8 +36,10 @@
                                         <span class="badge bg-warning text-dark fs-6">
                                             <i class="fas fa-crown me-1"></i>{{ loop.index }}
                                         </span>
-                                    {% elif loop.index <= 3 %}
+                                    {% elif loop.index == 2 %}
                                         <span class="badge bg-secondary fs-6">{{ loop.index }}</span>
+                                    {% elif loop.index == 3 %}
+                                        <span class="badge fs-6" style="background-color:#CD7F32;color:#fff;">{{ loop.index }}</span>
                                     {% elif loop.index <= 10 %}
                                         <span class="badge bg-info text-dark fs-6">{{ loop.index }}</span>
                                     {% else %}
@@ -67,11 +67,6 @@
                                 </td>
                                 <td>
                                     <span class="mmr-badge fs-6">{{ team.mmr }}</span>
-                                    {% if loop.index > 1 %}
-                                        {% set prev_mmr = teams[loop.index - 2].mmr %}
-                                        {% set diff = prev_mmr - team.mmr %}
-                                        <br><small class="text-muted">{{ diff }} behind</small>
-                                    {% endif %}
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center">
@@ -181,54 +176,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-function refreshLeaderboard() {
-    // Show loading state
-    const btn = document.getElementById('refreshLeaderboardBtn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
-    btn.disabled = true;
-    
-    // Make AJAX request to refresh endpoint
-    fetch('/admin/refresh_data', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show success message
-            btn.innerHTML = '<i class="fas fa-check me-2"></i>Refreshed!';
-            btn.className = 'btn btn-success';
-            
-            // Reload the page after a short delay to show updated data
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        } else {
-            // Show error message
-            btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
-            btn.className = 'btn btn-danger';
-        }
-    })
-    .catch(error => {
-        // Show error message
-        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
-        btn.className = 'btn btn-danger';
-    })
-    .finally(() => {
-        // Reset button after a delay
-        setTimeout(() => {
-            btn.innerHTML = originalText;
-            btn.className = 'btn btn-success';
-            btn.disabled = false;
-        }, 3000);
-    });
-}
-</script>
-
 <style>
 .timeline-item {
     border-left: 3px solid #007bff;

@@ -357,24 +357,28 @@ function refreshData() {
     });
 }
 
-document.getElementById('resetDataButton').addEventListener('click', function() {
-    if (confirm('Are you sure you want to reset all match and team data? This action cannot be undone.')) {
-        if (confirm('This is your final confirmation. Do you really want to reset all data?')) {
-            fetch('/reset_data', { method: 'POST' })
-                .then(response => {
-                    if (response.ok) {
-                        alert('All data has been reset successfully.');
-                        location.reload();
-                    } else {
-                        alert('Failed to reset data. Please try again.');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error resetting data:', error);
-                    alert('An error occurred while resetting data.');
-                });
+// Hook up Reset All Data button
+window.addEventListener('DOMContentLoaded', function() {
+    const resetBtn = document.getElementById('resetDataButton');
+    if (!resetBtn) return;
+    resetBtn.addEventListener('click', async function() {
+        if (!confirm('This will reset all teams, matches, and the week counter. Continue?')) return;
+        resetBtn.disabled = true;
+        try {
+            const resp = await fetch('/reset_data', { method: 'POST' });
+            if (resp.ok) {
+                alert('Data reset successfully.');
+                window.location.reload();
+            } else {
+                const txt = await resp.text();
+                alert('Error resetting data: ' + txt);
+            }
+        } catch (e) {
+            alert('Error resetting data: ' + (e?.message || e));
+        } finally {
+            resetBtn.disabled = false;
         }
-    }
+    });
 });
 </script>
 {% endblock %}
