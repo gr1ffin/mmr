@@ -1008,12 +1008,7 @@ def admin_import_team():
 
     return redirect(url_for('admin_panel'))
 
-@app.route('/match_setup')
-@admin_required
-def match_setup():
-    """Admin UI to preview and curate weekly matches before committing."""
-    teams = sorted([t for t in mmr_system.teams if t.active], key=lambda t: t.name.lower())
-    return render_template('match_setup.html', teams=teams, current_week=mmr_system.current_week)
+# Removed duplicate '/match_setup' route that conflicted with the legacy redirect.
 
 @app.route('/admin/match_setup/preview', methods=['POST'])
 @admin_required
