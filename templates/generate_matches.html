@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Generate Matches - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1>Generate Matches</h1>
+        <p>Use this page to generate matches for the current week. Specify the number of matches each team should play.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <form method="POST" action="{{ url_for('generate_matches') }}">
+            <div class="form-group">
+                <label for="matches_per_team">Number of Matches Per Team:</label>
+                <input type="number" class="form-control" id="matches_per_team" name="matches_per_team" min="1" required>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">Generate Matches</button>
+        </form>
+    </div>
+</div>
+
+<!-- Help Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        <h2>Help</h2>
+        <p>Enter the number of matches each team should play this week and click "Generate Matches". The system will automatically create matchups for the current week.</p>
+    </div>
+</div>
+{% endblock %}

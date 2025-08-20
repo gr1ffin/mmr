@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}System Settings - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card bg-gradient text-white" style="background: linear-gradient(45deg, #ffc107 0%, #fd7e14 100%);">
+            <div class="card-body text-center">
+                <h2 class="card-title mb-3">
+                    <i class="fas fa-cogs me-2"></i>System Settings
+                </h2>
+                <p class="mb-0">Configure MMR calculation parameters and system behavior</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-sliders-h me-2"></i>MMR Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_system_settings') }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="base_mmr" class="form-label">
+                                    <strong>Base MMR</strong>
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="base_mmr" 
+                                       name="base_mmr" 
+                                       value="{{ config['BASE_MMR'] }}" 
+                                       min="0" 
+                                       required>
+                                <div class="form-text">Starting MMR for new teams</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="k_factor" class="form-label">
+                                    <strong>K-Factor</strong>
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="k_factor" 
+                                       name="k_factor" 
+                                       value="{{ config['K_FACTOR'] }}" 
+                                       min="1" 
+                                       max="100" 
+                                       required>
+                                <div class="form-text">MMR change multiplier (higher = more volatile)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="placement_matches" class="form-label">
+                                    <strong>Placement Matches</strong>
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="placement_matches" 
+                                       name="placement_matches" 
+                                       value="{{ config['PLACEMENT_MATCHES'] }}" 
+                                       min="0" 
+                                       max="10" 
+                                       required>
+                                <div class="form-text">Matches before MMR stabilization</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="challenge_multiplier" class="form-label">
+                                    <strong>Challenge Multiplier</strong>
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="challenge_multiplier" 
+                                       name="challenge_multiplier" 
+                                       value="{{ config['CHALLENGE_MULTIPLIER'] }}" 
+                                       min="0.1" 
+                                       max="2.0" 
+                                       step="0.1" 
+                                       required>
+                                <div class="form-text">MMR impact for challenge matches</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="inactivity_penalty" class="form-label">
+                                    <strong>Inactivity Penalty</strong>
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="inactivity_penalty" 
+                                       name="inactivity_penalty" 
+                                       value="{{ config['INACTIVITY_PENALTY'] }}" 
+                                       min="0" 
+                                       max="50" 
+                                       required>
+                                <div class="form-text">MMR penalty per inactive week</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="point_diff_multiplier" class="form-label">
+                                    <strong>Point Diff Multiplier</strong>
+                                </label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="point_diff_multiplier" 
+                                       name="point_diff_multiplier" 
+                                       value="{{ config['POINT_DIFF_MULTIPLIER'] }}" 
+                                       min="0.01" 
+                                       max="1.0" 
+                                       step="0.01" 
+                                       required>
+                                <div class="form-text">Bonus for point differential</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Margin Bonuses -->
+                    <h6 class="mb-3">
+                        <i class="fas fa-trophy me-2"></i>Margin Bonuses
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="margin_3_0" class="form-label">3-0 Victory Bonus</label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="margin_3_0" 
+                                       name="margin_3_0" 
+                                       value="{{ config['MARGIN_BONUS']['3_0'] }}" 
+                                       min="0" 
+                                       max="20" 
+                                       required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="margin_3_1" class="form-label">3-1 Victory Bonus</label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="margin_3_1" 
+                                       name="margin_3_1" 
+                                       value="{{ config['MARGIN_BONUS']['3_1'] }}" 
+                                       min="0" 
+                                       max="20" 
+                                       required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="margin_3_2" class="form-label">3-2 Victory Bonus</label>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="margin_3_2" 
+                                       name="margin_3_2" 
+                                       value="{{ config['MARGIN_BONUS']['3_2'] }}" 
+                                       min="0" 
+                                       max="20" 
+                                       required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Form Actions -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('admin_panel') }}" class="btn btn-secondary btn-lg me-md-2">
+                            <i class="fas fa-arrow-left me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning btn-lg">
+                            <i class="fas fa-save me-2"></i>Update Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Current Settings Summary -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Current Settings
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Base MMR:</strong> {{ config['BASE_MMR'] }}<br>
+                    <strong>K-Factor:</strong> {{ config['K_FACTOR'] }}<br>
+                    <strong>Placement Matches:</strong> {{ config['PLACEMENT_MATCHES'] }}<br>
+                    <strong>Challenge Multiplier:</strong> {{ config['CHALLENGE_MULTIPLIER'] }}<br>
+                    <strong>Inactivity Penalty:</strong> {{ config['INACTIVITY_PENALTY'] }}/week<br>
+                    <strong>Point Diff Multiplier:</strong> {{ config['POINT_DIFF_MULTIPLIER'] }}
+                </div>
+                <div class="mb-3">
+                    <strong>Margin Bonuses:</strong><br>
+                    3-0: +{{ config['MARGIN_BONUS']['3_0'] }} MMR<br>
+                    3-1: +{{ config['MARGIN_BONUS']['3_1'] }} MMR<br>
+                    3-2: +{{ config['MARGIN_BONUS']['3_2'] }} MMR
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Help -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-question-circle me-2"></i>Settings Guide
+                </h6>
+            </div>
+            <div class="card-body">
+                <h6>K-Factor:</h6>
+                <ul class="small">
+                    <li><strong>Low (10-15):</strong> Stable ratings, slow changes</li>
+                    <li><strong>Medium (20-30):</strong> Balanced progression</li>
+                    <li><strong>High (40+):</strong> Volatile ratings, fast changes</li>
+                </ul>
+                
+                <h6>Margin Bonuses:</h6>
+                <ul class="small">
+                    <li>Reward dominant victories</li>
+                    <li>Encourage competitive play</li>
+                    <li>Balance skill gaps</li>
+                </ul>
+                
+                <div class="alert alert-warning mt-3">
+                    <strong>Warning:</strong> Changing these settings affects all future MMR calculations.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

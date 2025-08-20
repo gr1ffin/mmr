@@ -1,0 +1,19 @@
+[Unit]
+Description=MMR Flask app (Gunicorn)
+After=network.target
+
+[Service]
+User=griffin
+Group=www-data
+WorkingDirectory=/opt/mmr
+EnvironmentFile=/etc/mmr.env
+# Ensure venv bin is preferred
+Environment=PATH=/opt/mmr/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/opt/mmr/venv/bin/gunicorn -w 3 -k gthread --threads 4 --timeout 60 -b 127.0.0.1:8000 web_interface:app
+Restart=always
+RestartSec=3
+# Give Gunicorn a bit of time to stop gracefully
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

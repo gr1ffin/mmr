@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Teams - MMR Competitive Ladder{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">
+                    <i class="fas fa-users me-2"></i>All Teams
+                </h3>
+                <a href="{{ url_for('admin_login') }}" class="btn btn-primary">
+                    <i class="fas fa-lock me-2"></i>Admin Panel
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for team in teams %}
+                    {% set placement_needed = team.placement_matches | default(10) %}
+                    {% set provisional = (team.matches_played | default(0)) < placement_needed %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card team-card h-100">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    {% if loop.index == 1 %}
+                                        <i class="fas fa-crown fa-3x text-warning"></i>
+                                    {% elif loop.index <= 3 %}
+                                        <i class="fas fa-medal fa-3x text-secondary"></i>
+                                    {% else %}
+                                        <i class="fas fa-user-friends fa-3x text-primary"></i>
+                                    {% endif %}
+                                </div>
+                                <h5 class="card-title">{{ team.name }}</h5>
+                                <div class="mb-2">
+                                    <span class="mmr-badge">{{ 'TBD' if provisional else (team.mmr | round(1)) }}</span>
+                                </div>
+                                {% if provisional %}
+                                <div class="mb-2">
+                                    <span class="badge bg-warning text-dark">Provisional</span>
+                                </div>
+                                {% endif %}
+                                <div class="row text-center mb-3">
+                                    <div class="col-6">
+                                        <h6 class="text-muted">Rank</h6>
+                                        <h4 class="text-primary">{{ loop.index }}</h4>
+                                    </div>
+                                    <div class="col-6">
+                                        <h6 class="text-muted">Matches</h6>
+                                        <h4 class="text-success">{{ team.matches_played }}</h4>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <span class="badge bg-{{ 'success' if team.active else 'danger' }}">
+                                        <i class="fas fa-{{ 'check-circle' if team.active else 'times-circle' }} me-1"></i>
+                                        {{ 'Active' if team.active else 'Inactive' }}
+                                    </span>
+                                </div>
+                                <div class="d-grid">
+                                    <a href="{{ url_for('team_detail', team_name=team.name) }}" class="btn btn-outline-primary">
+                                        <i class="fas fa-eye me-2"></i>View Roster
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Section -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                <h4>{{ teams|length }}</h4>
+                <p class="text-muted mb-0">Total Teams</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-trophy fa-2x text-warning mb-2"></i>
+                <h4>{{ (teams[0].mmr if teams else 0) | round(1) }}</h4>
+                <p class="text-muted mb-0">Highest MMR</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-chart-line fa-2x text-success mb-2"></i>
+                <h4>{{ (teams|map(attribute='mmr')|sum / teams|length)|round(1) if teams else 0 }}</h4>
+                <p class="text-muted mb-0">Average MMR</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-check-circle fa-2x text-info mb-2"></i>
+                <h4>{{ teams|selectattr('active')|list|length }}</h4>
+                <p class="text-muted mb-0">Active Teams</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

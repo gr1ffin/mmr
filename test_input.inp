@@ -1,0 +1,37 @@
+# MMR System Test Input File
+# This file contains sample match results for testing the system
+
+# Week 1 Match Results
+# Format: MatchID, TeamA_Score, TeamB_Score, TeamA_Points, TeamB_Points
+
+# Match 1: Team Alpha vs Team Beta
+cc929875, 3, 1, 45, 32
+
+# Match 2: Team Gamma vs Team Foxtrot  
+c4d82d89, 3, 0, 52, 28
+
+# Match 3: Team Golf vs Team Beta
+643685cc, 2, 3, 38, 47
+
+# Match 4: Team India vs Team Delta
+adbfbb0d, 1, 3, 29, 41
+
+# Match 5: Team Hotel vs Team Juliet
+30f57ba5, 3, 2, 48, 44
+
+# Expected MMR Changes after these results:
+# Team Alpha: +13.0 MMR (3-1 win + margin bonus + point diff)
+# Team Beta: +1.3 MMR (3-2 win over Golf)
+# Team Gamma: +15.0 MMR (3-0 clean sweep + max margin bonus)
+# Team Foxtrot: -10.0 MMR (0-3 loss)
+# Team Golf: -10.3 MMR (2-3 loss)
+# Team India: -10.0 MMR (1-3 loss)
+# Team Delta: +11.0 MMR (3-1 win + margin bonus)
+# Team Hotel: +11.0 MMR (3-2 win + margin bonus)
+# Team Juliet: -10.0 MMR (2-3 loss)
+
+# Instructions:
+# 1. Go to http://localhost:5001 in your browser
+# 2. Navigate to Matches page
+# 3. Use these Match IDs to input results
+# 4. Watch the leaderboard update in real-time
