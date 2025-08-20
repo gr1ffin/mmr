@@ -179,8 +179,14 @@
                     </div>
                     <div class="col-md-3">
                         <div class="border rounded p-3">
-                            <h4 class="text-warning">{{ matches|rejectattr('completed')|list|length }}</h4>
-                            <small class="text-muted">Pending Matches</small>
+                            <h4 class="text-warning">{{ matches|rejectattr('completed')|selectattr('scheduled')|list|length }}</h4>
+                            <small class="text-muted">Scheduled Matches</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h4 class="text-danger">{{ matches|rejectattr('completed')|rejectattr('scheduled')|list|length }}</h4>
+                            <small class="text-muted">Unscheduled Matches</small>
                         </div>
                     </div>
                 </div>

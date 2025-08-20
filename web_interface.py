@@ -321,7 +321,9 @@ def matches():
     for m in matches:
         matches_by_week.setdefault(m.week, []).append(m)
     sorted_weeks = sorted(matches_by_week.keys())
-    return render_template('matches.html', matches_by_week=matches_by_week, sorted_weeks=sorted_weeks, matches=matches)
+    # Pass all teams (not just leaderboard) for logo display in templates
+    teams = mmr_system.teams
+    return render_template('matches.html', matches_by_week=matches_by_week, sorted_weeks=sorted_weeks, matches=matches, teams=teams)
 
 @app.route('/teams')
 def teams():
@@ -385,29 +387,16 @@ def team_detail(team_name):
     except StopIteration:
         rank = None
 
-    # Compute per-match MMR change for this team from history entries
-    def mmr_delta_for_match(m: Match) -> Optional[int]:
-        if not m.completed or not m.score:
-            return None
-        opp = m.team_b if m.team_a == team.name else m.team_a
-        a_sets, b_sets = m.score
-        if m.team_a == team.name:
-            my_sets, opp_sets = a_sets, b_sets
+    # Use stored MMR deltas from match records instead of parsing history
+    mmr_changes: Dict[str, Optional[int]] = {}
+    for m in team_matches:
+        if m.completed and m.mmr_delta_a is not None and m.mmr_delta_b is not None:
+            if m.team_a == team_name:
+                mmr_changes[m.match_id] = m.mmr_delta_a
+            elif m.team_b == team_name:
+                mmr_changes[m.match_id] = m.mmr_delta_b
         else:
-            my_sets, opp_sets = b_sets, a_sets
-        won = my_sets > opp_sets
-        phrase = f"Won {my_sets}-{opp_sets} vs {opp}" if won else f"Lost {my_sets}-{opp_sets} vs {opp}"
-        for entry in reversed(team.history or []):
-            if phrase in entry:
-                mobj = re.search(r"([+-]\\d+)\\s*MMR", entry)
-                if mobj:
-                    try:
-                        return int(mobj.group(1))
-                    except Exception:
-                        return None
-        return None
-
-    mmr_changes: Dict[str, Optional[int]] = {m.match_id: mmr_delta_for_match(m) for m in team_matches}
+            mmr_changes[m.match_id] = None
 
     return render_template('team_detail.html', team=team, matches=team_matches, display_mmr=display_mmr, win_rate=win_rate, avg_points=avg_points, rank=rank, placement_matches=mmr_system.placement_matches, mmr_changes=mmr_changes)
 
@@ -533,29 +522,9 @@ def match_detail(match_id):
     team_a = next((t for t in mmr_system.teams if t.name == match.team_a), None)
     team_b = next((t for t in mmr_system.teams if t.name == match.team_b), None)
 
-    def extract_mmr_delta(team: Team, opponent_name: str, score: Optional[Tuple[int,int]]) -> Optional[int]:
-        if not team or not score:
-            return None
-        a_sets, b_sets = score
-        # Determine expected history phrase for Win/Loss against opponent
-        won = (team.name == match.team_a and a_sets > b_sets) or (team.name == match.team_b and b_sets > a_sets)
-        if team.name == match.team_a:
-            my_sets, opp_sets = a_sets, b_sets
-        else:
-            my_sets, opp_sets = b_sets, a_sets
-        phrase = f"Won {my_sets}-{opp_sets} vs {opponent_name}" if won else f"Lost {my_sets}-{opp_sets} vs {opponent_name}"
-        for entry in reversed(team.history or []):
-            if phrase in entry:
-                m = re.search(r"([+-]\\d+)\\s*MMR", entry)
-                if m:
-                    try:
-                        return int(m.group(1))
-                    except Exception:
-                        return None
-        return None
-
-    mmr_a_delta = extract_mmr_delta(team_a, match.team_b, match.score) if match.completed else None
-    mmr_b_delta = extract_mmr_delta(team_b, match.team_a, match.score) if match.completed else None
+    # Use stored MMR deltas from the match record
+    mmr_a_delta = match.mmr_delta_a if match.completed else None
+    mmr_b_delta = match.mmr_delta_b if match.completed else None
 
     return render_template('match_detail.html', match=match, team_a=team_a, team_b=team_b, mmr_a_delta=mmr_a_delta, mmr_b_delta=mmr_b_delta)
 
@@ -1507,6 +1476,35 @@ def update_branding(team_name):
     mmr_system.save_data()
     flash('Branding updated.', 'success')
     return redirect(url_for('manage_teams'))
+
+@app.route('/schedule_match/<match_id>', methods=['POST'])
+@admin_required
+def schedule_match(match_id):
+    """Schedule a match with a specific time."""
+    scheduled_time = request.form.get('scheduled_time')
+    if not scheduled_time:
+        flash('Scheduled time is required.', 'error')
+        return redirect(request.referrer or url_for('matches'))
+    
+    success = mmr_system.schedule_match(match_id, scheduled_time)
+    if success:
+        flash('Match scheduled successfully.', 'success')
+    else:
+        flash('Failed to schedule match. It may not exist or already be completed.', 'error')
+    
+    return redirect(request.referrer or url_for('matches'))
+
+@app.route('/unschedule_match/<match_id>', methods=['POST'])
+@admin_required
+def unschedule_match(match_id):
+    """Unschedule a match."""
+    success = mmr_system.unschedule_match(match_id)
+    if success:
+        flash('Match unscheduled successfully.', 'success')
+    else:
+        flash('Failed to unschedule match. It may not exist or already be completed.', 'error')
+    
+    return redirect(request.referrer or url_for('matches'))
 
 if __name__ == '__main__':
     # In production use gunicorn. This block is for local/dev usage.

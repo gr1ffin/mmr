@@ -112,8 +112,9 @@
             </td>
             <td>{{ match.team_b }}</td>
             <td>
-              <span class="badge bg-{{ 'success' if match.completed else 'warning' }}">
-                {{ 'Completed' if match.completed else 'Pending' }}
+              {% set match_status = match.get_status() %}
+              <span class="badge bg-{{ 'success' if match_status == 'completed' else ('warning' if match_status == 'scheduled' else 'danger') }}">
+                {{ 'Completed' if match_status == 'completed' else ('Scheduled' if match_status == 'scheduled' else 'Unscheduled') }}
               </span>
             </td>
             <td>

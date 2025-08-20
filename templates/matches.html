@@ -12,91 +12,162 @@
                         <i class="fas fa-gamepad me-2"></i>All Matches
                     </h3>
                 </div>
-                <!-- Removed Refresh and Admin buttons -->
             </div>
             <div class="card-body">
                 {% if matches_by_week %}
                     {% for week in sorted_weeks %}
-                    <div class="mb-4">
+                    <div class="mb-5">
                         <h4 class="border-bottom pb-2">
                             <i class="fas fa-calendar-week me-2"></i>Week {{ week }}
                         </h4>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Match ID</th>
-                                        <th>Team A</th>
-                                        <th>Sets Won</th>
-                                        <th>Team B</th>
-                                        <th>Set Scores</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for match in matches_by_week[week] %}
-                                    <tr>
-                                        <td><code>{{ match.match_id }}</code></td>
-                                        <td>
-                                            <strong>{{ match.team_a }}</strong>
-                                        </td>
-                                        <td>
-                                            {% if match.score %}
-                                                <span class="badge bg-success fs-6">
-                                                    {{ match.score[0] }}-{{ match.score[1] }}
-                                                </span>
-                                            {% else %}
-                                                <span class="text-muted">vs</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <strong>{{ match.team_b }}</strong>
-                                        </td>
-                                        <td>
-                                            {% if match.set_scores %}
-                                                {% for set_score in match.set_scores %}
-                                                    <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
-                                                {% endfor %}
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-{{ 'success' if match.completed else 'warning' }}">
-                                                {{ 'Completed' if match.completed else 'Pending' }}
+                        <div class="row">
+                            {% for match in matches_by_week[week] %}
+                            {% set team_a_obj = teams | selectattr('name', 'equalto', match.team_a) | first %}
+                            {% set team_b_obj = teams | selectattr('name', 'equalto', match.team_b) | first %}
+                            {% set winner = team_a_obj if (match.completed and match.score and match.score[0] > match.score[1]) else (team_b_obj if (match.completed and match.score and match.score[1] > match.score[0]) else none) %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card match-card {{ 'match-completed' if match.completed else 'match-pending' }}" 
+                                     {% if winner %}style="border-left: 4px solid {{ winner.hexcolor or '#6366f1' }};"{% endif %}>
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <small class="text-muted">
+                                                <code>{{ match.match_id[:8] }}</code>
+                                            </small>
+                                            {% set match_status = match.get_status() %}
+                                            <span class="badge bg-{{ 'success' if match_status == 'completed' else ('warning' if match_status == 'scheduled' else 'danger') }}">
+                                                {{ 'Completed' if match_status == 'completed' else ('Scheduled' if match_status == 'scheduled' else 'Unscheduled') }}
                                             </span>
-                                        </td>
-                                        <td>
-                                            <div class="btn-group" role="group">
-                                                <a href="{{ url_for('match_detail', match_id=match.match_id) }}" 
-                                                   class="btn btn-sm btn-outline-primary" 
-                                                   title="View Match Details">
-                                                    <i class="fas fa-eye"></i>
-                                                </a>
-                                                {% if not match.completed %}
-                                                <a href="{{ url_for('input_result', match_id=match.match_id) }}" 
-                                                   class="btn btn-sm btn-success" 
-                                                   title="Input Match Result">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                {% endif %}
-                                                {% if session.get('admin_logged_in') and match.completed %}
-                                                <a href="{{ url_for('input_result', match_id=match.match_id) }}" class="btn btn-sm btn-warning" title="Edit Result">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                {% endif %}
-                                                {% if session.get('admin_logged_in') %}
-                                                <form method="POST" action="{{ url_for('delete_match', match_id=match.match_id) }}" onsubmit="return confirm('Delete this match?');">
-                                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                                                </form>
+                                        </div>
+                                        
+                                        <!-- Show scheduled time if match is scheduled -->
+                                        {% if match.scheduled and match.scheduled_time %}
+                                        <div class="text-center mb-2">
+                                            <small class="text-info">
+                                                <i class="fas fa-clock me-1"></i>
+                                                Scheduled: <span class="scheduled-time" data-time="{{ match.scheduled_time }}">{{ match.scheduled_time }}</span>
+                                            </small>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Enhanced team display with logos and winner styling -->
+                                        <div class="match-teams mb-2">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    {% if team_a_obj and team_a_obj.logo %}
+                                                        <img src="{{ team_a_obj.logo }}" alt="{{ match.team_a }} logo" 
+                                                             class="rounded me-2" style="width:24px;height:24px;object-fit:cover;">
+                                                    {% else %}
+                                                        <div class="d-flex align-items-center justify-content-center bg-light rounded me-2" style="width:24px;height:24px;">
+                                                            <i class="fas fa-shield-alt text-muted" style="font-size:12px;"></i>
+                                                        </div>
+                                                    {% endif %}
+                                                    <span class="{{ 'fw-bold' if winner and winner.name == match.team_a else '' }}">
+                                                        {{ match.team_a }}
+                                                        {% if match.completed and match.mmr_delta_a is not none %}
+                                                            <span class="text-muted">({{ '+' if match.mmr_delta_a >= 0 else '' }}{{ match.mmr_delta_a }})</span>
+                                                        {% endif %}
+                                                    </span>
+                                                </div>
+                                                {% if match.completed and match.score %}
+                                                    <span class="badge bg-primary">{{ match.score[0] }}</span>
                                                 {% endif %}
                                             </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                                            
+                                            <div class="text-center my-1">
+                                                <small class="text-muted">vs</small>
+                                            </div>
+                                            
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    {% if team_b_obj and team_b_obj.logo %}
+                                                        <img src="{{ team_b_obj.logo }}" alt="{{ match.team_b }} logo" 
+                                                             class="rounded me-2" style="width:24px;height:24px;object-fit:cover;">
+                                                    {% else %}
+                                                        <div class="d-flex align-items-center justify-content-center bg-light rounded me-2" style="width:24px;height:24px;">
+                                                            <i class="fas fa-shield-alt text-muted" style="font-size:12px;"></i>
+                                                        </div>
+                                                    {% endif %}
+                                                    <span class="{{ 'fw-bold' if winner and winner.name == match.team_b else '' }}">
+                                                        {{ match.team_b }}
+                                                        {% if match.completed and match.mmr_delta_b is not none %}
+                                                            <span class="text-muted">({{ '+' if match.mmr_delta_b >= 0 else '' }}{{ match.mmr_delta_b }})</span>
+                                                        {% endif %}
+                                                    </span>
+                                                </div>
+                                                {% if match.completed and match.score %}
+                                                    <span class="badge bg-primary">{{ match.score[1] }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+
+                                        {% if match.completed %}
+                                            <!-- Set Scores -->
+                                            <p class="card-text mb-2">
+                                                <strong>Set Scores:</strong> 
+                                                {% if match.set_scores %}
+                                                    {% for set_score in match.set_scores %}
+                                                        <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">No set scores</span>
+                                                {% endif %}
+                                            </p>
+                                        {% else %}
+                                            <p class="card-text text-muted mb-2">Match not yet played</p>
+                                        {% endif %}
+                                        
+                                        <!-- Action buttons -->
+                                        <div class="mt-2">
+                                            <div class="btn-group d-flex" role="group">
+                                                <a href="{{ url_for('match_detail', match_id=match.match_id) }}" 
+                                                   class="btn btn-sm btn-outline-primary flex-fill" 
+                                                   title="View Match Details">
+                                                    <i class="fas fa-eye"></i> Details
+                                                </a>
+                                                
+                                                {% if not match.completed %}
+                                                    {% if session.get('admin_logged_in') and not match.scheduled %}
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-info flex-fill" 
+                                                                onclick="scheduleMatch('{{ match.match_id }}')"
+                                                                title="Schedule Match">
+                                                            <i class="fas fa-calendar-plus"></i> Schedule
+                                                        </button>
+                                                    {% elif session.get('admin_logged_in') and match.scheduled %}
+                                                        <button type="button" 
+                                                                class="btn btn-sm btn-secondary flex-fill" 
+                                                                onclick="unscheduleMatch('{{ match.match_id }}')"
+                                                                title="Unschedule Match">
+                                                            <i class="fas fa-calendar-minus"></i> Unschedule
+                                                        </button>
+                                                    {% endif %}
+                                                    <a href="{{ url_for('input_result', match_id=match.match_id) }}" 
+                                                       class="btn btn-sm btn-success flex-fill" 
+                                                       title="Input Match Result">
+                                                        <i class="fas fa-edit"></i> Score
+                                                    </a>
+                                                {% elif session.get('admin_logged_in') %}
+                                                    <a href="{{ url_for('input_result', match_id=match.match_id) }}" 
+                                                       class="btn btn-sm btn-warning flex-fill" 
+                                                       title="Edit Result">
+                                                        <i class="fas fa-edit"></i> Edit
+                                                    </a>
+                                                {% endif %}
+                                                
+                                                {% if session.get('admin_logged_in') %}
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-danger flex-fill" 
+                                                            onclick="deleteMatch('{{ match.match_id }}', '{{ match.team_a }}', '{{ match.team_b }}')"
+                                                            title="Delete Match">
+                                                        <i class="fas fa-trash"></i> Delete
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
                         </div>
                     </div>
                     {% endfor %}
@@ -105,7 +176,6 @@
                     <i class="fas fa-gamepad fa-4x text-muted mb-3"></i>
                     <h5 class="text-muted">No matches found</h5>
                     <p class="text-muted">Generate some matches to get started!</p>
-                    <!-- Removed Generate Matches button -->
                 </div>
                 {% endif %}
             </div>
@@ -137,22 +207,171 @@
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <i class="fas fa-clock fa-2x text-warning mb-2"></i>
-                <h4>{{ matches|rejectattr('completed')|list|length }}</h4>
-                <p class="text-muted mb-0">Pending</p>
+                <i class="fas fa-calendar-check fa-2x text-warning mb-2"></i>
+                <h4>{{ matches|rejectattr('completed')|selectattr('scheduled')|list|length }}</h4>
+                <p class="text-muted mb-0">Scheduled</p>
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <i class="fas fa-calendar-week fa-2x text-info mb-2"></i>
-                <h4>{{ sorted_weeks|length }}</h4>
-                <p class="text-muted mb-0">Weeks</p>
+                <i class="fas fa-calendar-times fa-2x text-danger mb-2"></i>
+                <h4>{{ matches|rejectattr('completed')|rejectattr('scheduled')|list|length }}</h4>
+                <p class="text-muted mb-0">Unscheduled</p>
             </div>
         </div>
     </div>
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteMatch(matchId, teamA, teamB) {
+    if (confirm(`Delete match between ${teamA} and ${teamB}?`)) {
+        fetch(`/delete_match/${matchId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to delete match');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting match');
+        });
+    }
+}
+
+function scheduleMatch(matchId) {
+    // Create a modal for scheduling with date/time picker
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Schedule Match</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="scheduledDateTime" class="form-label">Scheduled Date & Time</label>
+                        <input type="datetime-local" 
+                               class="form-control" 
+                               id="scheduledDateTime" 
+                               required>
+                        <div class="form-text">
+                            Time will be displayed in each user's local timezone. 
+                            Current timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            The scheduled time will automatically display in the viewer's local timezone on match cards.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitSchedule('${matchId}')">Schedule Match</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    
+    // Clean up modal when hidden
+    modal.addEventListener('hidden.bs.modal', () => {
+        document.body.removeChild(modal);
+    });
+}
+
+function submitSchedule(matchId) {
+    const dateTime = document.getElementById('scheduledDateTime').value;
+    if (!dateTime) {
+        alert('Please select a date and time.');
+        return;
+    }
+    
+    // Convert to ISO string for backend
+    const scheduledTime = new Date(dateTime).toISOString();
+    
+    const formData = new FormData();
+    formData.append('scheduled_time', scheduledTime);
+    
+    fetch(`/schedule_match/${matchId}`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to schedule match');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error scheduling match');
+    });
+}
+
+function unscheduleMatch(matchId) {
+    if (confirm(`Unschedule this match?`)) {
+        fetch(`/unschedule_match/${matchId}`, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to unschedule match');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error unscheduling match');
+        });
+    }
+}
+
+// Convert all scheduled times to user's local timezone
+document.addEventListener('DOMContentLoaded', function() {
+    const scheduledTimes = document.querySelectorAll('.scheduled-time');
+    scheduledTimes.forEach(timeElement => {
+        const isoTime = timeElement.getAttribute('data-time');
+        if (isoTime) {
+            try {
+                const date = new Date(isoTime);
+                const options = {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    timeZoneName: 'short'
+                };
+                timeElement.textContent = date.toLocaleDateString('en-US', options);
+            } catch (error) {
+                console.error('Error parsing scheduled time:', error);
+                // Fallback to original time if parsing fails
+                timeElement.textContent = isoTime;
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

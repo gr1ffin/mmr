@@ -68,13 +68,19 @@ class MatchModel(Base):
     score = Column(JSON, nullable=True)  # [a, b]
     set_scores = Column(JSON, nullable=True)  # ["25:20", ...]
     completed = Column(Boolean, default=False)
+    scheduled = Column(Boolean, default=False)  # New: for 3-stage system
+    scheduled_time = Column(String, nullable=True)  # New: ISO timestamp when match is scheduled
     timestamp = Column(String, nullable=True)
+    # New: MMR deltas for each team
+    mmr_delta_a = Column(Integer, nullable=True)  # MMR change for team_a
+    mmr_delta_b = Column(Integer, nullable=True)  # MMR change for team_b
     __table_args__ = (
         Index('ix_matches_week', 'week'),
         Index('ix_matches_team_a', 'team_a'),
         Index('ix_matches_team_b', 'team_b'),
         Index('ix_matches_pair', 'team_a', 'team_b'),
         Index('ix_matches_completed', 'completed'),
+        Index('ix_matches_scheduled', 'scheduled'),
     )
 
 # New: simple key-value settings store
@@ -160,7 +166,21 @@ class Match:
         self.score = None
         self.set_scores = None
         self.completed = False
+        self.scheduled = False  # New: for 3-stage system
+        self.scheduled_time = None  # New: ISO timestamp when match is scheduled
         self.timestamp = None
+        # New: MMR deltas for each team
+        self.mmr_delta_a = None  # MMR change for team_a
+        self.mmr_delta_b = None  # MMR change for team_b
+
+    def get_status(self) -> str:
+        """Return the match status: 'unscheduled', 'scheduled', or 'completed'"""
+        if self.completed:
+            return 'completed'
+        elif self.scheduled:
+            return 'scheduled'
+        else:
+            return 'unscheduled'
 
     def to_dict(self) -> Dict:
         return {
@@ -171,7 +191,11 @@ class Match:
             'score': self.score,
             'set_scores': self.set_scores,
             'completed': self.completed,
-            'timestamp': self.timestamp
+            'scheduled': self.scheduled,
+            'scheduled_time': self.scheduled_time,
+            'timestamp': self.timestamp,
+            'mmr_delta_a': self.mmr_delta_a,
+            'mmr_delta_b': self.mmr_delta_b
         }
 
     @classmethod
@@ -180,7 +204,11 @@ class Match:
         match.score = data.get('score')
         match.set_scores = data.get('set_scores')
         match.completed = data.get('completed', False)
+        match.scheduled = data.get('scheduled', False)
+        match.scheduled_time = data.get('scheduled_time')
         match.timestamp = data.get('timestamp')
+        match.mmr_delta_a = data.get('mmr_delta_a')
+        match.mmr_delta_b = data.get('mmr_delta_b')
         return match
 
 class MMRSystem:
@@ -458,7 +486,11 @@ class MMRSystem:
                     m.score = tuple(mm.score) if mm.score else None
                     m.set_scores = mm.set_scores or None
                     m.completed = bool(mm.completed)
+                    m.scheduled = bool(getattr(mm, 'scheduled', False))
+                    m.scheduled_time = getattr(mm, 'scheduled_time', None)
                     m.timestamp = mm.timestamp
+                    m.mmr_delta_a = mm.mmr_delta_a
+                    m.mmr_delta_b = mm.mmr_delta_b
                     matches.append(m)
         except Exception as e:
             logging.exception(f"Failed loading matches from DB: {e}")
@@ -483,13 +515,43 @@ class MMRSystem:
                     mm.score = list(m.score) if m.score is not None else None
                     mm.set_scores = list(m.set_scores) if m.set_scores else None
                     mm.completed = bool(m.completed)
+                    mm.scheduled = bool(m.scheduled)
+                    mm.scheduled_time = m.scheduled_time
                     mm.timestamp = m.timestamp
+                    mm.mmr_delta_a = m.mmr_delta_a
+                    mm.mmr_delta_b = m.mmr_delta_b
                 for mid, mm in existing.items():
                     if mid not in seen:
                         db.delete(mm)
                 db.commit()
         except Exception as e:
             logging.exception(f"Failed saving matches to DB: {e}")
+
+    def schedule_match(self, match_id: str, scheduled_time: str) -> bool:
+        """Schedule a match by setting its scheduled flag and time."""
+        match = next((m for m in self.matches if m.match_id == match_id), None)
+        if not match:
+            return False
+        if match.completed:
+            return False  # Can't schedule completed matches
+        
+        match.scheduled = True
+        match.scheduled_time = scheduled_time
+        self.save_data()
+        return True
+
+    def unschedule_match(self, match_id: str) -> bool:
+        """Unschedule a match by removing its scheduled flag and time."""
+        match = next((m for m in self.matches if m.match_id == match_id), None)
+        if not match:
+            return False
+        if match.completed:
+            return False  # Can't unschedule completed matches
+        
+        match.scheduled = False
+        match.scheduled_time = None
+        self.save_data()
+        return True
 
     def update_settings(self, k_factor: Optional[int] = None, inactivity_penalty: Optional[int] = None, point_diff_multiplier: Optional[float] = None, margin_bonus: Optional[Dict[Tuple[int,int], int]] = None):
         if k_factor is not None:
@@ -502,42 +564,75 @@ class MMRSystem:
             self.margin_bonus = dict(margin_bonus)
         logging.info(f"Settings updated: K={self.k_factor}, INACTIVITY={self.inactivity_penalty}, POINT_MULT={self.point_diff_multiplier}, MARGIN_BONUS={self.margin_bonus}")
 
-    def update_mmr(self, winner: Team, loser: Team, score: Tuple[int, int], set_scores: Optional[List[str]] = None, points_winner: Optional[int] = None, points_loser: Optional[int] = None, record_history: bool = True) -> int:
+    def update_mmr(self, winner: Team, loser: Team, score: Tuple[int, int], set_scores: Optional[List[str]] = None, points_winner: Optional[int] = None, points_loser: Optional[int] = None, record_history: bool = True) -> Tuple[int, int]:
+        """
+        Non-zero-sum MMR system where both teams can gain MMR in close matches.
+        Returns (winner_gain, loser_change) where loser_change can be negative or positive.
+        """
+        # Calculate expected win probability for the winner
         expected_winner = 1 / (1 + 10 ** ((loser.mmr - winner.mmr) / 400))
-        core_gain = self.k_factor * (1 - expected_winner)
+        
+        # Base MMR calculations
+        winner_base_gain = self.k_factor * (1 - expected_winner)
+        loser_base_change = self.k_factor * (0 - expected_winner)  # Usually negative
+        
+        # Set margin bonuses
         winner_sets = max(score)
         loser_sets = min(score)
         set_bonus = self.margin_bonus.get((winner_sets, loser_sets), 0)
+        
+        # Point differential calculations
         if points_winner is None or points_loser is None:
             if set_scores:
                 try:
-                    points_winner = 0
-                    points_loser = 0
+                    points_winner = sum(int(s.split(':')[0]) for s in set_scores)
+                    points_loser = sum(int(s.split(':')[1]) for s in set_scores)
                 except Exception:
-                    points_winner = 0
-                    points_loser = 0
+                    points_winner = points_loser = 0
             else:
-                points_winner = 0
-                points_loser = 0
+                points_winner = points_loser = 0
+                
         point_diff = max(0, int(points_winner) - int(points_loser))
         point_diff_capped = min(point_diff, 75)
         point_factor = self.point_diff_multiplier * point_diff_capped
-        mmr_gain = int(round(core_gain + point_factor + set_bonus))
-        mmr_gain = max(1, mmr_gain)
-        winner.mmr = max(0, winner.mmr + mmr_gain)
-        loser.mmr = max(0, loser.mmr - mmr_gain)
+        
+        # Final MMR changes with non-zero-sum adjustments
+        winner_gain = int(round(winner_base_gain + point_factor + set_bonus))
+        winner_gain = max(1, winner_gain)  # Winner always gains at least 1
+        
+        # Loser change calculation - less harsh in close matches
+        closeness_factor = 1 - abs(expected_winner - 0.5) * 2  # 0 to 1, higher for closer matches
+        loser_change = int(round(loser_base_change * (0.6 + 0.4 * closeness_factor) - point_factor * 0.5))
+        
+        # In very close matches (within 15 MMR), loser might gain small amount
+        mmr_diff = abs(winner.mmr - loser.mmr)
+        if mmr_diff <= 15 and winner_sets - loser_sets <= 1:  # Close MMR and close score
+            loser_change = max(loser_change, int(winner_gain * 0.2))  # Loser gains 20% of winner's gain
+        
+        # Apply MMR changes
+        winner.mmr = max(0, winner.mmr + winner_gain)
+        loser.mmr = max(0, loser.mmr + loser_change)
+        
+        # Update match statistics
         winner.wins += 1
         loser.losses += 1
         winner.matches_played += 1
         loser.matches_played += 1
+        
+        # Update provisional status
         if winner.matches_played >= self.placement_matches:
             winner.provisional = False
         if loser.matches_played >= self.placement_matches:
             loser.provisional = False
+            
+        # Record history
         if record_history:
-            winner.history.append(f"Won {winner_sets}-{loser_sets} vs {loser.name} (+{mmr_gain} MMR, +{point_diff} pts)")
-            loser.history.append(f"Lost {loser_sets}-{winner_sets} vs {winner.name} (-{mmr_gain} MMR, -{point_diff} pts)")
-        return mmr_gain
+            winner_change_str = f"+{winner_gain}"
+            loser_change_str = f"+{loser_change}" if loser_change >= 0 else str(loser_change)
+            winner.history.append(f"Won {winner_sets}-{loser_sets} vs {loser.name} ({winner_change_str} MMR, +{point_diff} pts)")
+            loser.history.append(f"Lost {loser_sets}-{winner_sets} vs {winner.name} ({loser_change_str} MMR, -{point_diff} pts)")
+            
+        return winner_gain, loser_change
 
     def record_match(self, team_a_name: str, team_b_name: str, score: Tuple[int, int], set_scores: Optional[List[str]] = None):
         team_a = next((t for t in self.teams if t.name == team_a_name), None)
@@ -565,12 +660,15 @@ class MMRSystem:
                 pw, pl = points_b, points_a
         else:
             pw = pl = None
-        self.update_mmr(winner, loser, score, set_scores=set_scores, points_winner=pw, points_loser=pl)
+        winner_gain, loser_change = self.update_mmr(winner, loser, score, set_scores=set_scores, points_winner=pw, points_loser=pl)
         match = Match(team_a_name, team_b_name, self.current_week)
         match.score = score
         match.set_scores = set_scores
         match.completed = True
         match.timestamp = datetime.now().isoformat()
+        # Store MMR deltas in the match record
+        match.mmr_delta_a = winner_gain if winner is team_a else loser_change
+        match.mmr_delta_b = winner_gain if winner is team_b else loser_change
         self.matches.append(match)
         self.save_data()
 
@@ -613,7 +711,10 @@ class MMRSystem:
                     pw, pl = points_b, points_a
             else:
                 pw = pl = None
-            self.update_mmr(winner, loser, tuple(m.score), set_scores=m.set_scores, points_winner=pw, points_loser=pl, record_history=False)
+            mmr_gain, mmr_change = self.update_mmr(winner, loser, tuple(m.score), set_scores=m.set_scores, points_winner=pw, points_loser=pl, record_history=False)
+            # Store MMR deltas in the match record
+            m.mmr_delta_a = mmr_gain if winner is team_a else mmr_change
+            m.mmr_delta_b = mmr_gain if winner is team_b else mmr_change
         for t in self.teams:
             if t.matches_played >= self.placement_matches:
                 t.provisional = False
@@ -695,26 +796,118 @@ class MMRSystem:
         return created
 
     def generate_weekly_matches_preview(self, matches_per_team: int = 1) -> List['Match']:
-        """Generate a proposed set of matches for the current week prioritizing similar MMR."""
+        """Generate a proposed set of matches for the current week with improved distribution."""
+        import random
         teams = [t for t in self.teams if t.active]
         n = len(teams)
         if matches_per_team <= 0 or n < 2:
             return []
 
-        # Sort teams by MMR for easier pairing
-        teams.sort(key=lambda t: t.mmr)
         total_degree = n * matches_per_team
+        if total_degree % 2 != 0:
+            logging.warning(f"Cannot generate complete schedule: n={n}, k={matches_per_team} leads to odd total degree {total_degree}")
+            # For odd total degree, we'll generate as many matches as possible
+            total_degree -= 1
+
         forbidden_pairs = {frozenset({m.team_a, m.team_b}) for m in self.matches}
-        names = [t.name for t in teams]
+        target_pairs = total_degree // 2
+
+        # If all teams have very similar MMR (within 100 points), use round-robin style distribution
+        mmr_values = [t.mmr for t in teams]
+        mmr_range = max(mmr_values) - min(mmr_values) if mmr_values else 0
+        
+        if mmr_range <= 100 and n >= 4:
+            # Use snake draft style pairing for even distribution
+            return self._generate_snake_draft_matches(teams, matches_per_team, forbidden_pairs, target_pairs)
+        else:
+            # Use MMR-based pairing for skill-based matchmaking
+            return self._generate_mmr_based_matches(teams, matches_per_team, forbidden_pairs, target_pairs)
+
+    def _generate_snake_draft_matches(self, teams: List['Team'], matches_per_team: int, forbidden_pairs: set, target_pairs: int) -> List['Match']:
+        """Generate matches using snake draft style for even distribution when MMRs are similar."""
+        import random
+        
+        # Shuffle teams to randomize the starting order
+        shuffled_teams = teams.copy()
+        random.shuffle(shuffled_teams)
+        
+        names = [t.name for t in shuffled_teams]
         counts = {name: 0 for name in names}
         chosen_pairs: set[frozenset] = set()
-        target_pairs = total_degree // 2
+
+        def available_opponents(a: str) -> List[str]:
+            return [b for b in names
+                    if b != a
+                    and counts[b] < matches_per_team
+                    and frozenset({a, b}) not in forbidden_pairs
+                    and frozenset({a, b}) not in chosen_pairs]
+
+        # Snake draft pairing: pair teams in alternating order
+        for round_num in range(matches_per_team):
+            round_teams = names.copy()
+            if round_num % 2 == 1:  # Reverse order every other round
+                round_teams.reverse()
+            
+            # Pair teams in groups
+            for i in range(0, len(round_teams) - 1, 2):
+                if len(chosen_pairs) >= target_pairs:
+                    break
+                    
+                team_a = round_teams[i]
+                team_b = round_teams[i + 1]
+                
+                # Check if this pairing is valid
+                if (counts[team_a] < matches_per_team and 
+                    counts[team_b] < matches_per_team and
+                    frozenset({team_a, team_b}) not in forbidden_pairs and
+                    frozenset({team_a, team_b}) not in chosen_pairs):
+                    
+                    chosen_pairs.add(frozenset({team_a, team_b}))
+                    counts[team_a] += 1
+                    counts[team_b] += 1
+
+        # Fill remaining matches with available pairings
+        while len(chosen_pairs) < target_pairs:
+            # Find team with fewest matches
+            min_matches = min(counts.values())
+            candidates = [name for name, count in counts.items() if count == min_matches]
+            
+            if not candidates:
+                break
+                
+            team_a = random.choice(candidates)
+            opponents = available_opponents(team_a)
+            
+            if not opponents:
+                # If no opponents available for this team, try next team
+                continue
+                
+            team_b = random.choice(opponents)
+            chosen_pairs.add(frozenset({team_a, team_b}))
+            counts[team_a] += 1
+            counts[team_b] += 1
+
+        # Build Match objects
+        created: List[Match] = []
+        for pair in chosen_pairs:
+            a, b = tuple(pair)
+            created.append(Match(a, b, self.current_week))
+        return created
+
+    def _generate_mmr_based_matches(self, teams: List['Team'], matches_per_team: int, forbidden_pairs: set, target_pairs: int) -> List['Match']:
+        """Generate matches prioritizing similar MMR teams."""
+        # Sort teams by MMR for easier pairing
+        teams.sort(key=lambda t: t.mmr)
+        names = [t.name for t in teams]
+        name_to_team = {t.name: t for t in teams}
+        counts = {name: 0 for name in names}
+        chosen_pairs: set[frozenset] = set()
 
         def available_opponents(a: str) -> List[str]:
             """Find available opponents for team `a`, prioritizing closest MMR."""
-            team_a = next(t for t in teams if t.name == a)
+            team_a = name_to_team[a]
             potential_opponents = [
-                (b, abs(team_a.mmr - next(t for t in teams if t.name == b).mmr))
+                (b, abs(team_a.mmr - name_to_team[b].mmr))
                 for b in names
                 if b != a
                 and counts[b] < matches_per_team
@@ -734,7 +927,7 @@ class MMRSystem:
             return candidates[0]
 
         def backtrack() -> bool:
-            if len(chosen_pairs) == target_pairs:
+            if len(chosen_pairs) >= target_pairs:
                 return True
             a = select_team()
             if a is None:
