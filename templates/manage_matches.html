@@ -31,18 +31,45 @@
 
     <div id="previewContainer" class="mt-3" style="display:none;">
       <div class="alert alert-info" id="previewInfo"></div>
-      <div class="table-responsive">
-        <table class="table table-sm align-middle">
-          <thead class="table-light">
-            <tr>
-              <th style="width:50%">Team A</th>
-              <th style="width:50%">Team B</th>
-            </tr>
-          </thead>
-          <tbody id="previewBody">
-            <!-- rows injected here -->
-          </tbody>
-        </table>
+      <div class="row">
+        <!-- Left Panel: Team Status -->
+        <div class="col-md-4">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0"><i class="fas fa-users me-2"></i>Team Status</h5>
+            </div>
+            <div class="card-body p-0">
+              <div id="teamStatus" class="list-group list-group-flush">
+                <!-- Team status items will be injected here -->
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Right Panel: Match Pairings -->
+        <div class="col-md-8">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Match Pairings</h5>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:45%">Team A</th>
+                      <th style="width:10%" class="text-center">VS</th>
+                      <th style="width:45%">Team B</th>
+                    </tr>
+                  </thead>
+                  <tbody id="previewBody">
+                    <!-- rows injected here -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -132,20 +159,72 @@
   const info = document.getElementById('previewInfo');
   const errBox = document.getElementById('previewErrors');
 
+  // Track match counts for each team
+  let teamMatchCounts = {};
+
+  function initializeTeamCounts() {
+    teamMatchCounts = {};
+    activeTeams.forEach(team => {
+      teamMatchCounts[team.name] = 0;
+    });
+  }
+
+  function updateTeamStatus() {
+    const teamStatusContainer = document.getElementById('teamStatus');
+    teamStatusContainer.innerHTML = '';
+    
+    activeTeams.forEach(team => {
+      const matchCount = teamMatchCounts[team.name] || 0;
+      const targetMatches = parseInt(matchesPerTeamEl.value || '1', 10);
+      const statusClass = matchCount === targetMatches ? 'success' : matchCount > targetMatches ? 'danger' : 'warning';
+      
+      const teamItem = document.createElement('div');
+      teamItem.className = 'list-group-item d-flex align-items-center';
+      teamItem.innerHTML = `
+        <img src="${team.logo}" alt="${team.name}" class="rounded-circle me-3" style="width: 40px; height: 40px;">
+        <div class="flex-grow-1">
+          <div class="fw-bold">${team.name}</div>
+          <small class="text-muted">MMR: ${team.mmr}</small>
+        </div>
+        <span class="badge bg-${statusClass}">${matchCount}/${targetMatches}</span>
+      `;
+      teamStatusContainer.appendChild(teamItem);
+    });
+  }
+
+  function countTeamMatches() {
+    initializeTeamCounts();
+    const rows = Array.from(body.querySelectorAll('tr'));
+    
+    rows.forEach(tr => {
+      const [selA, selB] = tr.querySelectorAll('select');
+      const teamA = selA.value.trim();
+      const teamB = selB.value.trim();
+      
+      if (teamA && teamMatchCounts.hasOwnProperty(teamA)) {
+        teamMatchCounts[teamA]++;
+      }
+      if (teamB && teamMatchCounts.hasOwnProperty(teamB)) {
+        teamMatchCounts[teamB]++;
+      }
+    });
+    
+    updateTeamStatus();
+  }
+
   function makeTeamSelect(selected) {
     const sel = document.createElement('select');
     sel.className = 'form-select';
+    sel.addEventListener('change', countTeamMatches); // Add event listener for live updates
+    
     const optBlank = document.createElement('option');
     optBlank.value = ''; optBlank.textContent = '-- Select Team --';
     sel.appendChild(optBlank);
+    
     activeTeams.forEach(team => {
       const o = document.createElement('option');
       o.value = team.name;
-      o.innerHTML = `
-        <div style="display: flex; align-items: center;">
-          <img src="${team.logo}" alt="${team.name} Logo" style="width: 20px; height: 20px; border-radius: 50%; margin-right: 8px;">
-          <span>${team.name} (MMR: ${team.mmr})</span>
-        </div>`;
+      o.textContent = `${team.name} (MMR: ${team.mmr})`;
       if (selected && selected === team.name) o.selected = true;
       sel.appendChild(o);
     });
@@ -154,17 +233,28 @@
 
   function renderRows(pairs, totalRows) {
     body.innerHTML = '';
+    initializeTeamCounts();
+    
     for (let i = 0; i < totalRows; i++) {
       const tr = document.createElement('tr');
       const tdA = document.createElement('td');
+      const tdVs = document.createElement('td');
       const tdB = document.createElement('td');
+      
+      tdVs.className = 'text-center fw-bold text-muted';
+      tdVs.textContent = 'VS';
+      
       const pair = i < pairs.length ? pairs[i] : {team_a: '', team_b: ''};
       tdA.appendChild(makeTeamSelect(pair.team_a));
       tdB.appendChild(makeTeamSelect(pair.team_b));
+      
       tr.appendChild(tdA);
+      tr.appendChild(tdVs);
       tr.appendChild(tdB);
       body.appendChild(tr);
     }
+    
+    countTeamMatches(); // Initial count after rendering
     container.style.display = '';
     btnPublish.disabled = false;
     btnClear.disabled = false;
