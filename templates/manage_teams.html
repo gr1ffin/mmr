@@ -96,6 +96,7 @@
 
 <!-- Edit Team Modals -->
 {% for team in teams %}
+{% set team_idx = loop.index %}
 <div class="modal fade" id="editTeamModal{{ loop.index }}" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -158,21 +159,32 @@
                 {% if team.roster %}
                 <div class="list-group mb-3">
                     {% for player in team.roster %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ player.name }}</strong>
-                            {% if player.role %}
-                            <br><small class="text-muted">{{ player.role }}</small>
-                            {% endif %}
+                    {% set display_name = player.display_name|default(player.name)|default('') %}
+                    {% set roblox = player.roblox_username|default('') %}
+                    {% set role = player.role|default('Player') %}
+                    {% set player_name_key = player.name|default(display_name)|default('') %}
+                    <div class="list-group-item d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                        
+                            <div>
+                                <div>
+                                    <strong>{{ display_name }}</strong>
+                                    {% if roblox %}<span class="text-muted"> - <em>{{ roblox }}</em></span>{% endif %}
+                                </div>
+                                <small class="text-muted">{{ role }}</small>
+                            </div>
                         </div>
-                        <div>
-                            <span class="badge bg-primary me-2">{{ player.matches_played }} matches</span>
-                            <button type="button" class="btn btn-sm btn-outline-danger" 
-                                    onclick="removePlayer('{{ team.name }}', '{{ player.name }}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                        <div class="text-end">
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        onclick="removePlayer('{{ team.name|tojson }}', '{{ player_name_key|tojson }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
+
+                    {# Removed nested per-player modal to avoid Bootstrap nested modal issues #}
                     {% endfor %}
                 </div>
                 {% else %}
@@ -185,9 +197,9 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="player_name_{{ loop.index }}" class="form-label">Player Name</label>
-                                <input type="text" class="form-control" id="player_name_{{ loop.index }}" 
-                                       name="player_name" required>
+                                <label for="player_display_name_{{ loop.index }}" class="form-label">Display Name</label>
+                                <input type="text" class="form-control" id="player_display_name_{{ loop.index }}" 
+                                       name="display_name" placeholder="e.g., Griff" required>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -195,6 +207,15 @@
                                 <label for="player_role_{{ loop.index }}" class="form-label">Role (Optional)</label>
                                 <input type="text" class="form-control" id="player_role_{{ loop.index }}" 
                                        name="role" placeholder="e.g., Captain, Player">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="player_roblox_{{ loop.index }}" class="form-label">Roblox Username (Optional)</label>
+                                <input type="text" class="form-control" id="player_roblox_{{ loop.index }}" 
+                                       name="roblox_username" placeholder="e.g., roblox_user123">
                             </div>
                         </div>
                     </div>
@@ -223,7 +244,7 @@
                 <div class="d-grid gap-2">
                     <button type="button" class="btn btn-warning" 
                             onclick="resetTeamMMR('{{ team.name }}')">
-                        <i class="fas fa-undo me-2"></i>Reset MMR to 1000
+                        <i class="fas fa-undo me-2"></i>Reset MMR to {{ base_mmr }}
                     </button>
                     <button type="button" class="btn btn-info" 
                             onclick="clearTeamHistory('{{ team.name }}')">
@@ -255,8 +276,43 @@
 </div>
 {% endblock %}
 
+{# Global Edit Player Modal (outside any other modal) #}
+<div class="modal fade" id="editPlayerModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-user-edit me-2"></i>Edit Player</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editPlayerForm" method="POST" action="#">
+          <input type="hidden" name="original_name" value="">
+          <div class="mb-3">
+            <label class="form-label">Display Name</label>
+            <input type="text" class="form-control" name="display_name" value="" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Roblox ID</label>
+            <input type="text" class="form-control" name="roblox_username" value="" placeholder="roblox username or id">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Role</label>
+            <input type="text" class="form-control" name="role" value="" placeholder="e.g., Captain, Player">
+          </div>
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% block scripts %}
 <script>
+const BASE_MMR = "{{ base_mmr|int }}";
+
 function removePlayer(teamName, playerName) {
     if (confirm(`Remove ${playerName} from ${teamName}?`)) {
         const t = encodeURIComponent(teamName);
@@ -264,7 +320,7 @@ function removePlayer(teamName, playerName) {
         fetch(`/admin/remove_player/${t}/${p}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
             }
         }).then(response => {
             if (response.ok) {
@@ -277,12 +333,12 @@ function removePlayer(teamName, playerName) {
 }
 
 function resetTeamMMR(teamName) {
-    if (confirm(`Reset ${teamName} MMR to 1000?`)) {
+    if (confirm(`Reset ${teamName} MMR to ${BASE_MMR}?`)) {
         const t = encodeURIComponent(teamName);
         fetch(`/admin/reset_team_mmr/${t}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
             }
         }).then(response => {
             if (response.ok) {
@@ -300,7 +356,7 @@ function clearTeamHistory(teamName) {
         fetch(`/admin/clear_team_history/${t}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
             }
         }).then(response => {
             if (response.ok) {
@@ -318,7 +374,7 @@ function deleteTeam(teamName) {
         fetch(`/admin/delete_team/${t}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
             }
         }).then(response => {
             if (response.ok) {
@@ -346,5 +402,6 @@ function forceRecalculateAll() {
         }).catch(() => alert('Error recalculating MMR'));
     }
 }
+
 </script>
 {% endblock %}

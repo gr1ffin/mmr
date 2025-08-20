@@ -12,140 +12,198 @@
                 </h3>
             </div>
             <div class="card-body">
-                <!-- Overview Content Only (MMR tab removed) -->
-                <!-- Match Info -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <div class="card" style="border-color: {{ (team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd') }};">
-                            <div class="card-header text-white text-center" style="background-color: {{ (team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd') }};">
-                                <div class="d-flex align-items-center justify-content-center">
-                                    {% if team_a and team_a.logo %}
-                                        <img src="{{ team_a.logo }}" alt="{{ match.team_a }} logo" class="rounded me-2" style="width:28px;height:28px;object-fit:cover;">
-                                    {% else %}
-                                        <span class="rounded-circle bg-light me-2" style="display:inline-block;width:28px;height:28px;"></span>
-                                    {% endif %}
-                                    <h5 class="mb-0">
-                                        <a href="{{ url_for('team_detail', team_name=match.team_a) }}" class="text-white text-decoration-none">{{ match.team_a }}</a>
+                <!-- Tabs -->
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#mmr" type="button" role="tab">+/- MMR</button>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <!-- Overview Tab -->
+                    <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                        <!-- Match Info -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card" style="border-color: {{(team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd')}};">
+                                    <div class="card-header text-white text-center" style="background-color: {{ (team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd') }};">
+                                        <div class="d-flex align-items-center justify-content-center">
+                                            {% if team_a and team_a.logo %}
+                                                <img src="{{ team_a.logo }}" alt="{{ match.team_a }} logo" class="rounded me-2" style="width:28px;height:28px;object-fit:cover;">
+                                            {% else %}
+                                                <span class="rounded-circle bg-light me-2" style="display:inline-block;width:28px;height:28px;"></span>
+                                            {% endif %}
+                                            <h5 class="mb-0">
+                                                <a href="{{ url_for('team_detail', team_name=match.team_a) }}" class="text-white text-decoration-none">{{ match.team_a }}</a>
+                                                {% if mmr_a_delta is not none %}
+                                                    <small class="ms-2 badge bg-{{ 'success' if mmr_a_delta >= 0 else 'danger' }}">{{ '+' if mmr_a_delta >= 0 else '' }}{{ mmr_a_delta }} MMR</small>
+                                                {% endif %}
+                                            </h5>
+                                        </div>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        {% if match.score %}
+                                        <h2 class="display-4" style="color: {{ (team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd') }};">{{ match.score[0] }}</h2>
+                                        <p class="text-muted">Sets Won</p>
+                                        {% if match.set_scores %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Set Scores:</small><br>
+                                            {% for set_score in match.set_scores %}
+                                            <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                        {% else %}
+                                        <h2 class="text-muted">-</h2>
+                                        <p class="text-muted">Pending</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card" style="border-color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">
+                                    <div class="card-header text-white text-center" style="background-color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">
+                                        <div class="d-flex align-items-center justify-content-center">
+                                            {% if team_b and team_b.logo %}
+                                                <img src="{{ team_b.logo }}" alt="{{ match.team_b }} logo" class="rounded me-2" style="width:28px;height:28px;object-fit:cover;">
+                                            {% else %}
+                                                <span class="rounded-circle bg-light me-2" style="display:inline-block;width:28px;height:28px;"></span>
+                                            {% endif %}
+                                            <h5 class="mb-0">
+                                                <a href="{{ url_for('team_detail', team_name=match.team_b) }}" class="text-white text-decoration-none">{{ match.team_b }}</a>
+                                                {% if mmr_b_delta is not none %}
+                                                    <small class="ms-2 badge bg-{{ 'success' if mmr_b_delta >= 0 else 'danger' }}">{{ '+' if mmr_b_delta >= 0 else '' }}{{ mmr_b_delta }} MMR</small>
+                                                {% endif %}
+                                            </h5>
+                                        </div>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        {% if match.score %}
+                                        <h2 class="display-4" style="color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">{{ match.score[1] }}</h2>
+                                        <p class="text-muted">Sets Won</p>
+                                        {% if match.set_scores %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Set Scores:</small><br>
+                                            {% for set_score in match.set_scores %}
+                                            <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                        {% else %}
+                                        <h2 class="text-muted">-</h2>
+                                        <p class="text-muted">Pending</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Match Metadata -->
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Match ID</h6>
+                                        <code class="fs-5">{{ match.match_id }}</code>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Week</h6>
+                                        <h4 class="text-primary">{{ match.week }}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Status</h6>
+                                        <span class="badge bg-{{ 'success' if match.completed else 'warning' }} fs-6">
+                                            {{ 'Completed' if match.completed else 'Pending' }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Match Result -->
+                        {% if match.completed %}
+                        <div class="card border-success mb-4">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-trophy me-2"></i>Match Result
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-md-6">
+                                        <h6>{{ match.team_a }}</h6>
+                                        {% if match.score[0] > match.score[1] %}
+                                        <span class="badge bg-success fs-6">Winner</span>
+                                        {% else %}
+                                        <span class="badge bg-danger fs-6">Loser</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>{{ match.team_b }}</h6>
+                                        {% if match.score[1] > match.score[0] %}
+                                        <span class="badge bg-success fs-6">Winner</span>
+                                        {% else %}
+                                        <span class="badge bg-danger fs-6">Loser</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% if match.timestamp %}
+                                <div class="text-center mt-3">
+                                    <small class="text-muted">Completed: {{ match.timestamp }}</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- MMR Impact Tab -->
+                    <div class="tab-pane fade" id="mmr" role="tabpanel">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">{{ match.team_a }}</h6>
                                         {% if mmr_a_delta is not none %}
-                                            <small class="ms-2 badge bg-{{ 'success' if mmr_a_delta >= 0 else 'danger' }}">{{ '+' if mmr_a_delta >= 0 else '' }}{{ mmr_a_delta }} MMR</small>
+                                            <h3 class="mb-0 text-{{ 'success' if mmr_a_delta >= 0 else 'danger' }}">{{ '+' if mmr_a_delta >= 0 else '' }}{{ mmr_a_delta }} MMR</h3>
+                                        {% else %}
+                                            <span class="text-muted">Pending</span>
                                         {% endif %}
-                                    </h5>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="card-body text-center">
-                                {% if match.score %}
-                                <h2 class="display-4" style="color: {{ (team_a.hexcolor if team_a and team_a.hexcolor else '#0d6efd') }};">{{ match.score[0] }}</h2>
-                                <p class="text-muted">Sets Won</p>
-                                {% else %}
-                                <h2 class="text-muted">-</h2>
-                                <p class="text-muted">Pending</p>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card" style="border-color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">
-                            <div class="card-header text-white text-center" style="background-color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">
-                                <div class="d-flex align-items-center justify-content-center">
-                                    {% if team_b and team_b.logo %}
-                                        <img src="{{ team_b.logo }}" alt="{{ match.team_b }} logo" class="rounded me-2" style="width:28px;height:28px;object-fit:cover;">
-                                    {% else %}
-                                        <span class="rounded-circle bg-light me-2" style="display:inline-block;width:28px;height:28px;"></span>
-                                    {% endif %}
-                                    <h5 class="mb-0">
-                                        <a href="{{ url_for('team_detail', team_name=match.team_b) }}" class="text-white text-decoration-none">{{ match.team_b }}</a>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">{{ match.team_b }}</h6>
                                         {% if mmr_b_delta is not none %}
-                                            <small class="ms-2 badge bg-{{ 'success' if mmr_b_delta >= 0 else 'danger' }}">{{ '+' if mmr_b_delta >= 0 else '' }}{{ mmr_b_delta }} MMR</small>
+                                            <h3 class="mb-0 text-{{ 'success' if mmr_b_delta >= 0 else 'danger' }}">{{ '+' if mmr_b_delta >= 0 else '' }}{{ mmr_b_delta }} MMR</h3>
+                                        {% else %}
+                                            <span class="text-muted">Pending</span>
                                         {% endif %}
-                                    </h5>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="card-body text-center">
-                                {% if match.score %}
-                                <h2 class="display-4" style="color: {{ (team_b.hexcolor if team_b and team_b.hexcolor else '#198754') }};">{{ match.score[1] }}</h2>
-                                <p class="text-muted">Sets Won</p>
-                                {% else %}
-                                <h2 class="text-muted">-</h2>
-                                <p class="text-muted">Pending</p>
-                                {% endif %}
-                            </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Match Metadata -->
-                <div class="row mb-4">
-                    <div class="col-md-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted">Match ID</h6>
-                                <code class="fs-5">{{ match.match_id }}</code>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted">Week</h6>
-                                <h4 class="text-primary">{{ match.week }}</h4>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted">Status</h6>
-                                <span class="badge bg-{{ 'success' if match.completed else 'warning' }} fs-6">
-                                    {{ 'Completed' if match.completed else 'Pending' }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Match Result -->
-                {% if match.completed %}
-                <div class="card border-success mb-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-trophy me-2"></i>Match Result
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row text-center">
-                            <div class="col-md-6">
-                                <h6>{{ match.team_a }}</h6>
-                                {% if match.score[0] > match.score[1] %}
-                                <span class="badge bg-success fs-6">Winner</span>
-                                {% else %}
-                                <span class="badge bg-danger fs-6">Loser</span>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6">
-                                <h6>{{ match.team_b }}</h6>
-                                {% if match.score[1] > match.score[0] %}
-                                <span class="badge bg-success fs-6">Winner</span>
-                                {% else %}
-                                <span class="badge bg-danger fs-6">Loser</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% if match.set_scores %}
+                        {% if session.get('admin_logged_in') %}
                         <div class="text-center mt-3">
-                            <small class="text-muted">Set Scores:</small><br>
-                            {% for set_score in match.set_scores %}
-                            <span class="badge bg-light text-dark me-1">{{ set_score }}</span>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if match.timestamp %}
-                        <div class="text-center mt-3">
-                            <small class="text-muted">Completed: {{ match.timestamp }}</small>
+                            <a href="{{ url_for('input_result', match_id=match.match_id) }}" class="btn btn-primary">
+                                <i class="fas fa-edit me-2"></i>Edit Result
+                            </a>
                         </div>
                         {% endif %}
                     </div>
                 </div>
-                {% endif %}
 
                 <!-- Actions -->
                 <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-3">

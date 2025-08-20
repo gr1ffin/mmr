@@ -107,10 +107,17 @@
                 {% if team.roster %}
                 <div class="list-group">
                     {% for player in team.roster %}
+                    {% set display_name = player.display_name|default(player.name)|default('') %}
+                    {% set roblox = player.roblox_username|default('') %}
+                    {% set role = player.role|default('Player') %}
                     <div class="list-group-item d-flex align-items-center">
-                        <div>
-                            <h6 class="mb-1">{{ player.name }}</h6>
-                            <small class="text-muted">{{ player.role if player.role else 'Player' }}</small>
+                
+                        <div class="flex-grow-1">
+                            <div>
+                                <strong>{{ display_name }}</strong>
+                                {% if roblox %}<span class="text-muted"> - <em>{{ roblox }}</em></span>{% endif %}
+                            </div>
+                            <small class="text-muted">{{ role }}</small>
                         </div>
                     </div>
                     {% endfor %}

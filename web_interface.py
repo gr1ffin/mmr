@@ -9,6 +9,16 @@ import logging
 import requests
 from werkzeug.middleware.proxy_fix import ProxyFix
 import re
+import time
+from dotenv import load_dotenv
+from functools import wraps
+
+# Load .env for local/dev use (production uses systemd EnvironmentFile)
+load_dotenv()
+# Also load mmr.env if present (user-provided env file)
+import os as _os
+if _os.path.exists('mmr.env'):
+    load_dotenv('mmr.env')
 
 # Configure logging for the web server
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -30,6 +40,72 @@ app.config.update(
 
 # Discord webhook URL from environment variable (no hard-coded secrets)
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+# Discord bot token for REST profile lookups (optional)
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
+
+# Cache for Discord avatar URLs to minimize API calls
+_avatar_cache: Dict[str, Tuple[str, float]] = {}
+_AVATAR_TTL_SECONDS = 3600
+
+
+def _default_avatar_url(discord_id: str, size: int = 128) -> str:
+    try:
+        idx = int(discord_id) % 6
+    except Exception:
+        idx = 0
+    return f"https://cdn.discordapp.com/embed/avatars/{idx}.png?size={size}"
+
+
+def get_discord_avatar_url(discord_id: Optional[str], size: int = 128) -> str:
+    """Return a Discord avatar CDN URL for a user ID. Falls back to default avatar.
+    Caches results for a short TTL to avoid rate limits.
+    """
+    if not discord_id:
+        return _default_avatar_url("0", size)
+
+    now = time.time()
+    cache_key = f"{discord_id}:{size}"
+    cached = _avatar_cache.get(cache_key)
+    if cached and now < cached[1]:
+        return cached[0]
+
+    # If no bot token configured, return default avatar (no API access)
+    if not DISCORD_BOT_TOKEN:
+        url = _default_avatar_url(discord_id, size)
+        _avatar_cache[cache_key] = (url, now + _AVATAR_TTL_SECONDS)
+        return url
+
+    try:
+        resp = requests.get(
+            f"https://discord.com/api/v10/users/{discord_id}",
+            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            timeout=3,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            avatar = data.get("avatar")
+            uid = data.get("id", str(discord_id))
+            if avatar:
+                url = f"https://cdn.discordapp.com/avatars/{uid}/{avatar}.png?size={size}"
+            else:
+                url = _default_avatar_url(uid, size)
+        elif resp.status_code in (401, 403):
+            logging.warning("Discord API unauthorized; check DISCORD_BOT_TOKEN or bot guild membership.")
+            url = _default_avatar_url(discord_id, size)
+        else:
+            url = _default_avatar_url(discord_id, size)
+    except Exception as e:
+        logging.warning(f"Discord avatar fetch failed for {discord_id}: {e}")
+        url = _default_avatar_url(discord_id, size)
+
+    _avatar_cache[cache_key] = (url, now + _AVATAR_TTL_SECONDS)
+    return url
+
+
+@app.context_processor
+def inject_helpers():
+    # Make helper available in Jinja templates as `discord_avatar_url(...)`
+    return {"discord_avatar_url": get_discord_avatar_url}
 
 # Helper: send a plain text message to Discord via webhook (best-effort)
 def _post_discord_webhook_message(content: str) -> None:
@@ -140,12 +216,12 @@ except Exception as e:
 
 # Admin authentication decorator
 def admin_required(f):
+    @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('admin_logged_in'):
             flash('Admin access required. Please log in.', 'error')
             return redirect(url_for('admin_login'))
         return f(*args, **kwargs)
-    decorated_function.__name__ = f.__name__
     return decorated_function
 
 @app.route('/')
@@ -311,7 +387,7 @@ def admin_panel():
 def manage_teams():
     """Manage team rosters."""
     teams = mmr_system.teams
-    return render_template('manage_teams.html', teams=teams)
+    return render_template('manage_teams.html', teams=teams, base_mmr=BASE_MMR)
 
 @app.route('/generate_matches', methods=['GET', 'POST'])
 @admin_required
@@ -338,8 +414,11 @@ def create_team():
         except ValueError:
             initial_mmr = BASE_MMR
         active = True if request.form.get('active') in ('on', 'true', '1') else False
-        player_names = request.form.getlist('player_names[]')
-        player_roles = request.form.getlist('player_roles[]')
+        # Backward compatible: prefer new fields, fallback to legacy
+        display_names = request.form.getlist('player_display_names[]') or request.form.getlist('player_names[]')
+        roblox_usernames = request.form.getlist('player_roblox_usernames[]') or []
+        discord_ids = request.form.getlist('player_discord_ids[]') or []
+        player_roles = request.form.getlist('player_roles[]') or []
 
         if not team_name:
             flash('Team name is required!', 'error')
@@ -354,12 +433,27 @@ def create_team():
         new_team = Team(name=team_name, mmr=initial_mmr)
         new_team.active = active
         new_team.provisional = True
-        # Build roster
+        # Build roster using new schema
         roster = []
-        for n, r in zip(player_names, player_roles):
-            n = (n or '').strip()
-            if n:
-                roster.append({'name': n, 'role': (r or '').strip(), 'matches_played': 0})
+        max_len = len(display_names)
+        for i in range(max_len):
+            dn = (display_names[i] if i < len(display_names) else '') or ''
+            rb = (roblox_usernames[i] if i < len(roblox_usernames) else '') or ''
+            did = (discord_ids[i] if i < len(discord_ids) else '') or ''
+            rl = (player_roles[i] if i < len(player_roles) else '') or ''
+            dn = dn.strip()
+            rb = rb.strip()
+            did = did.strip()
+            rl = rl.strip()
+            if dn:
+                roster.append({
+                    'display_name': dn,
+                    'name': dn,  # legacy alias
+                    'roblox_username': rb,
+                    'discord_id': did,
+                    'role': rl,
+                    'matches_played': 0
+                })
         new_team.roster = roster
 
         mmr_system.teams.append(new_team)
@@ -493,8 +587,14 @@ def delete_match(match_id):
 
     mmr_system.matches = [m for m in mmr_system.matches if m.match_id != match_id]
     mmr_system.save_data()
+    # Recalculate MMR to reflect the deletion
+    try:
+        mmr_system.recalculate_all_mmr()
+    except Exception:
+        logging.exception('Failed to recalculate after match deletion')
     flash('Match deleted successfully.', 'success')
-    return redirect(url_for('matches'))
+    # Prefer navigating back to where the deletion was initiated
+    return redirect(request.referrer or url_for('manage_matches'))
 
 @app.route('/simulate_match', methods=['POST'])
 @admin_required
@@ -737,20 +837,103 @@ def add_player(team_name):
     if not team:
         flash('Team not found.', 'error')
         return redirect(url_for('manage_teams'))
-    player_name = request.form.get('player_name')
-    role = request.form.get('role')
-    if not player_name:
-        flash('Player name is required.', 'error')
+    # New fields, with backward-compatible fallback
+    display_name = (request.form.get('display_name') or request.form.get('player_name') or '').strip()
+    role = (request.form.get('role') or '').strip()
+    roblox_username = (request.form.get('roblox_username') or '').strip()
+    discord_id = (request.form.get('discord_id') or '').strip()
+
+    if not display_name:
+        flash('Display name is required.', 'error')
         return redirect(url_for('manage_teams'))
     if team.roster is None:
         team.roster = []
-    # Avoid duplicates by name (case-insensitive)
-    if any(p.get('name', '').lower() == player_name.lower() for p in team.roster):
+
+    # Avoid duplicates: prefer discord_id uniqueness when provided, else by display name
+    if discord_id and any((p or {}).get('discord_id') == discord_id for p in team.roster):
+        flash('A player with this Discord ID already exists on the roster.', 'error')
+        return redirect(url_for('manage_teams'))
+    if any(((p or {}).get('display_name') or (p or {}).get('name', '')).lower() == display_name.lower() for p in team.roster):
         flash('Player already in roster.', 'error')
         return redirect(url_for('manage_teams'))
-    team.roster.append({'name': player_name, 'role': role, 'matches_played': 0})
+
+    team.roster.append({
+        'display_name': display_name,
+        'name': display_name,  # legacy alias
+        'roblox_username': roblox_username,
+        'discord_id': discord_id,
+        'role': role,
+        'matches_played': 0
+    })
     mmr_system.save_data()
     flash('Player added.', 'success')
+    return redirect(url_for('manage_teams'))
+
+@app.route('/admin/edit_player/<team_name>', methods=['POST'])
+@admin_required
+def edit_player(team_name):
+    """Edit an existing player on a team's roster.
+    Identifies the player using original_name and optional original_discord_id.
+    Allows updating: display_name, discord_id, roblox_username, role.
+    """
+    team = next((t for t in mmr_system.teams if t.name == team_name), None)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('manage_teams'))
+
+    original_name = (request.form.get('original_name') or '').strip()
+    original_discord_id = (request.form.get('original_discord_id') or '').strip()
+
+    new_display_name = (request.form.get('display_name') or '').strip()
+    new_discord_id = (request.form.get('discord_id') or '').strip()
+    new_roblox_username = (request.form.get('roblox_username') or '').strip()
+    new_role = (request.form.get('role') or '').strip()
+
+    if not new_display_name:
+        flash('Display name is required.', 'error')
+        return redirect(url_for('manage_teams'))
+
+    roster = team.roster or []
+    # Find the player: prefer matching both name/display_name and discord_id if provided
+    idx = None
+    for i, p in enumerate(roster):
+        name_val = (p or {}).get('display_name') or (p or {}).get('name') or ''
+        did_val = (p or {}).get('discord_id') or ''
+        if original_discord_id:
+            if name_val == original_name and did_val == original_discord_id:
+                idx = i
+                break
+        else:
+            if name_val == original_name:
+                idx = i
+                break
+
+    if idx is None:
+        flash('Player not found on roster.', 'error')
+        return redirect(url_for('manage_teams'))
+
+    # Duplicate checks (ignore self):
+    for j, p in enumerate(roster):
+        if j == idx:
+            continue
+        other_name = ((p or {}).get('display_name') or (p or {}).get('name') or '').strip().lower()
+        if other_name and other_name == new_display_name.lower():
+            flash('Another player already has this display name on the roster.', 'error')
+            return redirect(url_for('manage_teams'))
+        if new_discord_id and (p or {}).get('discord_id') == new_discord_id:
+            flash('Another player already uses this Discord ID on the roster.', 'error')
+            return redirect(url_for('manage_teams'))
+
+    # Update fields
+    roster[idx]['display_name'] = new_display_name
+    roster[idx]['name'] = new_display_name  # legacy alias for compatibility
+    roster[idx]['discord_id'] = new_discord_id
+    roster[idx]['roblox_username'] = new_roblox_username
+    roster[idx]['role'] = new_role
+
+    team.roster = roster
+    mmr_system.save_data()
+    flash('Player updated.', 'success')
     return redirect(url_for('manage_teams'))
 
 @app.route('/admin/remove_player/<team_name>/<player_name>', methods=['POST'])
@@ -985,11 +1168,14 @@ def admin_import_team():
             for p in roster:
                 if not isinstance(p, dict):
                     continue
-                n = (p.get('name') or '').strip()
-                if not n:
+                dn = (p.get('display_name') or p.get('name') or '').strip()
+                if not dn:
                     continue
                 cleaned.append({
-                    'name': n,
+                    'display_name': dn,
+                    'name': dn,  # legacy alias
+                    'roblox_username': (p.get('roblox_username') or '').strip(),
+                    'discord_id': (p.get('discord_id') or '').strip(),
                     'role': (p.get('role') or '').strip(),
                     'matches_played': int(p.get('matches_played') or 0)
                 })
