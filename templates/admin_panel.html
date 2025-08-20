@@ -137,6 +137,11 @@
                     <a href="{{ url_for('export_data') }}" class="btn btn-outline-success">
                         <i class="fas fa-file-export me-2"></i>Export Data
                     </a>
+                    <form method="POST" action="{{ url_for('notify_leaderboard') }}" onsubmit="return confirm('Send the current leaderboard to Discord?');">
+                        <button type="submit" class="btn btn-outline-primary btn-lg">
+                            <i class="fas fa-bullhorn me-2"></i>Send Leaderboard to Discord
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -293,9 +298,17 @@
         <div class="modal-body">
           <div class="mb-3">
             <label for="teamJsonTextarea" class="form-label">Paste team JSON</label>
-            <textarea id="teamJsonTextarea" name="team_json" class="form-control" rows="12" placeholder='{"name":"Team X","mmr":1000,"active":true,"roster":[{"name":"Player 1","role":"DPS"}]}' required></textarea>
+            <textarea id="teamJsonTextarea" name="team_json" class="form-control" rows="12" placeholder='{
+  "name": "Team X",
+  "mmr": 1000,
+  "active": true,
+  "roster": [
+    { "display_name": "Player 1", "roblox_username": "rbx_user1", "role": "Player" },
+    { "display_name": "Player 2", "roblox_username": "rbx_user2", "role": "Captain" }
+  ]
+}' required></textarea>
             <div class="form-text">
-              Accepts a single team object, an array of team objects, or {"teams": [ ... ]}. Existing team names are skipped.
+              Accepts a single team object, an array of team objects, or {"teams": [ ... ]}. Player fields supported: display_name (or name), roblox_username (or roblox/roblox_id), role, matches_played.
             </div>
           </div>
         </div>

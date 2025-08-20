@@ -69,6 +69,13 @@
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         <button type="button" 
+                                                class="btn btn-sm btn-outline-secondary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#brandingModal{{ loop.index }}"
+                                                title="Branding (Color & Logo)">
+                                            <i class="fas fa-palette"></i>
+                                        </button>
+                                        <button type="button" 
                                                 class="btn btn-sm btn-outline-info" 
                                                 data-bs-toggle="modal" 
                                                 data-bs-target="#rosterModal{{ loop.index }}"
@@ -143,6 +150,38 @@
     </div>
 </div>
 
+<!-- Branding Modal -->
+<div class="modal fade" id="brandingModal{{ loop.index }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-palette me-2"></i>{{ team.name }} - Branding
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('update_branding', team_name=team.name) }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Hex Color</label>
+            <input type="text" class="form-control" name="hexcolor" value="{{ team.hexcolor or '#374151' }}" placeholder="#1D4ED8">
+            <div class="form-text">Use a hex color like #1D4ED8 (or #1de for short).</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Logo URL</label>
+            <input type="url" class="form-control" name="logo" value="{{ team.logo or '' }}" placeholder="https://...">
+            <div class="form-text">Public image URL for Discord thumbnail.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Branding</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- Roster Management Modal -->
 <div class="modal fade" id="rosterModal{{ loop.index }}" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -153,79 +192,55 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <!-- Current Roster -->
-                <h6>Current Roster</h6>
-                {% if team.roster %}
-                <div class="list-group mb-3">
-                    {% for player in team.roster %}
-                    {% set display_name = player.display_name|default(player.name)|default('') %}
-                    {% set roblox = player.roblox_username|default('') %}
-                    {% set role = player.role|default('Player') %}
-                    {% set player_name_key = player.name|default(display_name)|default('') %}
-                    <div class="list-group-item d-flex align-items-center justify-content-between">
-                        <div class="d-flex align-items-center">
-                        
-                            <div>
-                                <div>
-                                    <strong>{{ display_name }}</strong>
-                                    {% if roblox %}<span class="text-muted"> - <em>{{ roblox }}</em></span>{% endif %}
+            <form method="POST" action="{{ url_for('update_roster', team_name=team.name) }}">
+                <div class="modal-body">
+                    <h6>Current Roster</h6>
+                    <div id="rosterList{{ loop.index }}" class="list-group mb-3">
+                        {% if team.roster %}
+                        {% for player in team.roster %}
+                        {% set display_name = player.display_name|default(player.name)|default('') %}
+                        {% set roblox = player.roblox_username|default('') %}
+                        {% set role = player.role|default('') %}
+                        {% set original_name = player.name|default(display_name)|default('') %}
+                        <div class="list-group-item">
+                            <div class="row g-2 align-items-end">
+                                <input type="hidden" name="original_names[]" value="{{ original_name }}">
+                                <div class="col-md-4">
+                                    <label class="form-label mb-0 small">Display Name</label>
+                                    <input type="text" class="form-control" name="display_names[]" value="{{ display_name }}" required>
                                 </div>
-                                <small class="text-muted">{{ role }}</small>
+                                <div class="col-md-4">
+                                    <label class="form-label mb-0 small">Roblox Username</label>
+                                    <input type="text" class="form-control" name="roblox_usernames[]" value="{{ roblox }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label mb-0 small">Role</label>
+                                    <input type="text" class="form-control" name="roles[]" value="{{ role }}">
+                                </div>
+                                <div class="col-md-1 d-grid">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Remove" onclick="removeRosterRow(this)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="text-end">
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-outline-danger" 
-                                        onclick="removePlayer('{{ team.name|tojson }}', '{{ player_name_key|tojson }}')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
+                        {% endfor %}
+                        {% else %}
+                        {# If no players, leave list empty; admins can add rows below #}
+                        {% endif %}
                     </div>
 
-                    {# Removed nested per-player modal to avoid Bootstrap nested modal issues #}
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-muted">No players in roster</p>
-                {% endif %}
-
-                <!-- Add New Player -->
-                <h6>Add New Player</h6>
-                <form method="POST" action="{{ url_for('add_player', team_name=team.name) }}">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="player_display_name_{{ loop.index }}" class="form-label">Display Name</label>
-                                <input type="text" class="form-control" id="player_display_name_{{ loop.index }}" 
-                                       name="display_name" placeholder="e.g., Griff" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="player_role_{{ loop.index }}" class="form-label">Role (Optional)</label>
-                                <input type="text" class="form-control" id="player_role_{{ loop.index }}" 
-                                       name="role" placeholder="e.g., Captain, Player">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="player_roblox_{{ loop.index }}" class="form-label">Roblox Username (Optional)</label>
-                                <input type="text" class="form-control" id="player_roblox_{{ loop.index }}" 
-                                       name="roblox_username" placeholder="e.g., roblox_user123">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-success">
-                            <i class="fas fa-plus me-2"></i>Add Player
+                    <div class="d-flex justify-content-end mb-2">
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="addRosterRow('rosterList{{ loop.index }}')">
+                            <i class="fas fa-plus me-1"></i>Add Row
                         </button>
                     </div>
-                </form>
-            </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-lg">Save All Changes</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -403,5 +418,38 @@ function forceRecalculateAll() {
     }
 }
 
+function addRosterRow(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const item = document.createElement('div');
+    item.className = 'list-group-item';
+    item.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <input type="hidden" name="original_names[]" value="">
+        <div class="col-md-4">
+          <label class="form-label mb-0 small">Display Name</label>
+          <input type="text" class="form-control" name="display_names[]" value="" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label mb-0 small">Roblox Username</label>
+          <input type="text" class="form-control" name="roblox_usernames[]" value="">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label mb-0 small">Role</label>
+          <input type="text" class="form-control" name="roles[]" value="">
+        </div>
+        <div class="col-md-1 d-grid">
+          <button type="button" class="btn btn-sm btn-outline-danger" title="Remove" onclick="removeRosterRow(this)">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>`;
+    container.appendChild(item);
+}
+
+function removeRosterRow(btn) {
+    const item = btn.closest('.list-group-item');
+    if (item) item.remove();
+}
 </script>
 {% endblock %}

@@ -9,7 +9,6 @@ import logging
 import requests
 from werkzeug.middleware.proxy_fix import ProxyFix
 import re
-import time
 from dotenv import load_dotenv
 from functools import wraps
 
@@ -40,72 +39,32 @@ app.config.update(
 
 # Discord webhook URL from environment variable (no hard-coded secrets)
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
-# Discord bot token for REST profile lookups (optional)
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 
-# Cache for Discord avatar URLs to minimize API calls
-_avatar_cache: Dict[str, Tuple[str, float]] = {}
-_AVATAR_TTL_SECONDS = 3600
-
-
-def _default_avatar_url(discord_id: str, size: int = 128) -> str:
-    try:
-        idx = int(discord_id) % 6
-    except Exception:
-        idx = 0
-    return f"https://cdn.discordapp.com/embed/avatars/{idx}.png?size={size}"
-
-
-def get_discord_avatar_url(discord_id: Optional[str], size: int = 128) -> str:
-    """Return a Discord avatar CDN URL for a user ID. Falls back to default avatar.
-    Caches results for a short TTL to avoid rate limits.
+def _contrast_text_color(hex_str: Optional[str], light: str = '#ffffff', dark: str = '#000000') -> str:
+    """Return a text color with good contrast for the given background hex color.
+    Uses YIQ luma approximation.
     """
-    if not discord_id:
-        return _default_avatar_url("0", size)
-
-    now = time.time()
-    cache_key = f"{discord_id}:{size}"
-    cached = _avatar_cache.get(cache_key)
-    if cached and now < cached[1]:
-        return cached[0]
-
-    # If no bot token configured, return default avatar (no API access)
-    if not DISCORD_BOT_TOKEN:
-        url = _default_avatar_url(discord_id, size)
-        _avatar_cache[cache_key] = (url, now + _AVATAR_TTL_SECONDS)
-        return url
-
     try:
-        resp = requests.get(
-            f"https://discord.com/api/v10/users/{discord_id}",
-            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-            timeout=3,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            avatar = data.get("avatar")
-            uid = data.get("id", str(discord_id))
-            if avatar:
-                url = f"https://cdn.discordapp.com/avatars/{uid}/{avatar}.png?size={size}"
-            else:
-                url = _default_avatar_url(uid, size)
-        elif resp.status_code in (401, 403):
-            logging.warning("Discord API unauthorized; check DISCORD_BOT_TOKEN or bot guild membership.")
-            url = _default_avatar_url(discord_id, size)
-        else:
-            url = _default_avatar_url(discord_id, size)
-    except Exception as e:
-        logging.warning(f"Discord avatar fetch failed for {discord_id}: {e}")
-        url = _default_avatar_url(discord_id, size)
-
-    _avatar_cache[cache_key] = (url, now + _AVATAR_TTL_SECONDS)
-    return url
+        h = (hex_str or '').strip().lstrip('#')
+        if len(h) == 3:
+            h = ''.join(ch * 2 for ch in h)
+        if len(h) != 6:
+            # fallback to dark text on light-ish default
+            return light
+        r = int(h[0:2], 16)
+        g = int(h[2:4], 16)
+        b = int(h[4:6], 16)
+        yiq = (r * 299 + g * 587 + b * 114) / 1000
+        # Threshold 160 gives decent balance for saturated colors
+        return dark if yiq > 160 else light
+    except Exception:
+        return light
 
 
 @app.context_processor
 def inject_helpers():
-    # Make helper available in Jinja templates as `discord_avatar_url(...)`
-    return {"discord_avatar_url": get_discord_avatar_url}
+    # Expose helpers to Jinja templates
+    return {"contrast_text_color": _contrast_text_color}
 
 # Helper: send a plain text message to Discord via webhook (best-effort)
 def _post_discord_webhook_message(content: str) -> None:
@@ -121,41 +80,132 @@ def _post_discord_webhook_message(content: str) -> None:
 # Helper: send an embed to Discord via webhook (best-effort)
 def _post_discord_embed(embed: Dict) -> None:
     if not DISCORD_WEBHOOK_URL:
+        logging.warning("Discord webhook URL is not set.")
         return
     payload = {
-        # You can optionally set a username/avatar for the webhook appearance
-        # 'username': 'MMR Bot',
-        # 'avatar_url': 'https://example.com/avatar.png',
         'embeds': [embed]
     }
     try:
+        logging.info(f"Sending embed to Discord webhook: {json.dumps(payload)}")
         resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
         if resp.status_code not in (200, 204):
             logging.warning(f"Discord webhook (embed) returned status {resp.status_code}: {resp.text}")
+        else:
+            logging.info("Embed sent successfully to Discord webhook.")
     except Exception as e:
         logging.warning(f"Failed to post Discord embed: {e}")
+
+# Helper: parse #RRGGBB -> int for Discord embed color
+def _parse_hex_color(s: Optional[str], default: int = 0x5865F2) -> int:
+    try:
+        if not s:
+            return default
+        h = s.strip().lstrip('#')
+        if len(h) == 3:
+            h = ''.join(ch * 2 for ch in h)
+        return int(h, 16)
+    except Exception:
+        return default
 
 # Helper: format and send a match result notification
 def notify_discord_match_result(match: Match, score_a: int, score_b: int, set_scores: Optional[List[str]]) -> None:
     try:
         match_url = request.url_root.rstrip('/') + url_for('match_detail', match_id=match.match_id)
         sets_text = ', '.join(set_scores) if set_scores else 'N/A'
-        # Choose a color (green if team_a won, red if team_b won, gray if tie)
-        color = 0x57F287 if score_a > score_b else (0xED4245 if score_b > score_a else 0x99AAB5)
+
+        # Resolve teams
+        team_a_obj = next((t for t in mmr_system.teams if t.name == match.team_a), None)
+        team_b_obj = next((t for t in mmr_system.teams if t.name == match.team_b), None)
+
+        # Determine winner for styling
+        winner = None
+        if score_a > score_b:
+            winner = team_a_obj
+        elif score_b > score_a:
+            winner = team_b_obj
+
+        # Color & thumbnail based on winner
+        if winner is not None:
+            color = _parse_hex_color(getattr(winner, 'hexcolor', None), 0x57F287)
+            thumbnail = {'url': getattr(winner, 'logo', '')} if getattr(winner, 'logo', '') else None
+        else:
+            color = 0x99AAB5  # tie/neutral
+            thumbnail = None
+
+        fields = [
+            {'name': 'Set Scores', 'value': sets_text, 'inline': False},
+            {'name': 'Details', 'value': f"[View Match]({match_url})", 'inline': False}
+        ]
+
+        # Include post-match MMR for teams with >= 2 matches played
+        try:
+            a_mp = int(getattr(team_a_obj, 'matches_played', 0) or 0)
+            b_mp = int(getattr(team_b_obj, 'matches_played', 0) or 0)
+        except Exception:
+            a_mp = b_mp = 0
+
+        title_parts = []
+        if team_a_obj:
+            title_a = team_a_obj.name
+            if a_mp >= 2:
+                title_a += f" ({team_a_obj.mmr})"
+            title_parts.append(title_a)
+        else:
+            title_parts.append(match.team_a)
+
+        if team_b_obj:
+            title_b = team_b_obj.name
+            if b_mp >= 2:
+                title_b += f" ({team_b_obj.mmr})"
+            title_parts.append(title_b)
+
         embed = {
-            'title': f"Match Result - Week {match.week}",
-            'description': f"{match.team_a} {score_a}-{score_b} {match.team_b}",
+            'title': f"{title_parts[0]} {score_a}-{score_b} {title_parts[1]}",
+            'description': f"Match Result - Week {match.week}",
             'color': color,
-            'fields': [
-                {'name': 'Set Scores', 'value': sets_text, 'inline': False},
-                {'name': 'Details', 'value': f"[View Match]({match_url})", 'inline': False}
-            ],
+            'fields': fields,
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'footer': {'text': 'STARS'}
+        }
+        if thumbnail:
+            embed['thumbnail'] = thumbnail
+
+        _post_discord_embed(embed)
+    except Exception as e:
+        logging.warning(f"Failed to compose/send Discord notification: {e}")
+
+# Helper: announce weekly schedule to Discord webhook
+def notify_discord_week_schedule(week: int, matches: List[Match]) -> None:
+    try:
+        if not matches:
+            return
+        matches_url = request.url_root.rstrip('/') + url_for('matches')
+        # Chunk matches into multiple fields if long
+        lines = [f"{m.team_a} vs {m.team_b}" for m in matches]
+        fields = []
+        chunk = []
+        total_chars = 0
+        for line in lines:
+            # Discord field value soft limit ~1024 chars
+            if total_chars + len(line) + 1 > 900:  # keep margin
+                fields.append({'name': f'Matches ({len(chunk)})', 'value': '\n'.join(chunk), 'inline': False})
+                chunk = []
+                total_chars = 0
+            chunk.append(line)
+            total_chars += len(line) + 1
+        if chunk:
+            fields.append({'name': f'Matches ({len(chunk)})', 'value': '\n'.join(chunk), 'inline': False})
+        embed = {
+            'title': f"Weekly Schedule - Week {week}",
+            'description': f"Scheduled matches for Week {week}.\n[View Matches]({matches_url})",
+            'color': 0x5865F2,  # blurple
+            'fields': fields,
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'footer': {'text': 'MMR System'}
         }
         _post_discord_embed(embed)
     except Exception as e:
-        logging.warning(f"Failed to compose/send Discord notification: {e}")
+        logging.warning(f"Failed to send weekly schedule webhook: {e}")
 
 # Global MMR system instance
 mmr_system = MMRSystem()
@@ -1094,7 +1144,14 @@ def admin_remigrate():
 @app.route('/admin/import_team', methods=['POST'])
 @admin_required
 def admin_import_team():
-    """Import a new team from pasted JSON in admin panel modal."""
+    """Import a new team from pasted JSON in admin panel modal.
+    Accepts:
+      - A single team object
+      - An array of team objects
+      - An object with a "teams" array
+    Player objects support flexible keys and are normalized to:
+      display_name, name (legacy alias), roblox_username, role, matches_played
+    """
     raw = request.form.get('team_json', '').strip()
     if not raw:
         flash('No JSON provided.', 'error')
@@ -1115,6 +1172,13 @@ def admin_import_team():
     else:
         flash('JSON must be a team object or list of team objects.', 'error')
         return redirect(url_for('admin_panel'))
+
+    def _first_nonempty(d: dict, keys: list[str]) -> str:
+        for k in keys:
+            v = d.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return ''
 
     added = 0
     skipped = 0
@@ -1168,16 +1232,22 @@ def admin_import_team():
             for p in roster:
                 if not isinstance(p, dict):
                     continue
-                dn = (p.get('display_name') or p.get('name') or '').strip()
+                # Normalize player fields
+                dn = _first_nonempty(p, ['display_name', 'name', 'displayName'])
                 if not dn:
                     continue
+                rb = _first_nonempty(p, ['roblox_username', 'roblox', 'roblox_id', 'robloxId', 'robloxUsername'])
+                rl = _first_nonempty(p, ['role', 'position'])
+                try:
+                    mp = int(p.get('matches_played') or 0)
+                except Exception:
+                    mp = 0
                 cleaned.append({
                     'display_name': dn,
                     'name': dn,  # legacy alias
-                    'roblox_username': (p.get('roblox_username') or '').strip(),
-                    'discord_id': (p.get('discord_id') or '').strip(),
-                    'role': (p.get('role') or '').strip(),
-                    'matches_played': int(p.get('matches_played') or 0)
+                    'roblox_username': rb,
+                    'role': rl,
+                    'matches_played': mp
                 })
             new_team.roster = cleaned
         else:
@@ -1274,7 +1344,161 @@ def admin_match_setup_commit():
     mmr_system.matches.extend(new_matches)
     mmr_system.save_data()
     created = len(new_matches)
+
+    # Announce schedule via Discord webhook (best-effort)
+    try:
+        notify_discord_week_schedule(mmr_system.current_week, new_matches)
+    except Exception:
+        logging.warning('Weekly schedule webhook failed unexpectedly.')
+
     return jsonify({'success': True, 'created': created, 'week': mmr_system.current_week})
+
+@app.route('/admin/update_roster/<team_name>', methods=['POST'])
+@admin_required
+def update_roster(team_name):
+    """Bulk update a team's roster from a single form submission.
+    Accepts parallel arrays: original_names[], display_names[], roblox_usernames[], roles[].
+    Rows with empty original_name and non-empty display_name are treated as additions.
+    Players missing from submission are removed.
+    """
+    team = next((t for t in mmr_system.teams if t.name == team_name), None)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('manage_teams'))
+
+    # Gather form arrays
+    original_names = [ (s or '').strip() for s in request.form.getlist('original_names[]') ]
+    display_names = [ (s or '').strip() for s in request.form.getlist('display_names[]') ]
+    roblox_usernames = [ (s or '').strip() for s in request.form.getlist('roblox_usernames[]') ]
+    roles = [ (s or '').strip() for s in request.form.getlist('roles[]') ]
+
+    n = max(len(original_names), len(display_names), len(roblox_usernames), len(roles))
+    # Normalize lengths
+    while len(original_names) < n: original_names.append('')
+    while len(display_names) < n: display_names.append('')
+    while len(roblox_usernames) < n: roblox_usernames.append('')
+    while len(roles) < n: roles.append('')
+
+    # Map existing players by their current display/name
+    existing_by_name = {}
+    for p in (team.roster or []):
+        key = (p or {}).get('display_name') or (p or {}).get('name') or ''
+        if key:
+            existing_by_name[key] = p
+
+    new_roster = []
+    seen = set()
+
+    for i in range(n):
+        orig = original_names[i]
+        dn = display_names[i]
+        rb = roblox_usernames[i]
+        rl = roles[i]
+
+        # Skip completely empty rows
+        if not orig and not dn and not rb and not rl:
+            continue
+
+        if not dn:
+            flash('Display name cannot be blank for roster rows.', 'error')
+            return redirect(url_for('manage_teams'))
+
+        key_lower = dn.lower()
+        if key_lower in seen:
+            flash('Duplicate display names in submission.', 'error')
+            return redirect(url_for('manage_teams'))
+        seen.add(key_lower)
+
+        base = existing_by_name.get(orig, {}) if orig else {}
+        new_entry = {
+            'display_name': dn,
+            'name': dn,  # legacy alias
+            'roblox_username': rb,
+            'role': rl,
+            'matches_played': int((base or {}).get('matches_played') or 0),
+            'discord_id': (base or {}).get('discord_id') or ''
+        }
+        new_roster.append(new_entry)
+
+    # Apply and persist
+    team.roster = new_roster
+    mmr_system.save_data()
+
+    flash('Roster updated.', 'success')
+    return redirect(url_for('manage_teams'))
+
+@app.route('/admin/notify_leaderboard', methods=['POST'])
+@admin_required
+def notify_leaderboard():
+    """Send current leaderboard to Discord webhook."""
+    try:
+        lb = mmr_system.get_leaderboard()
+        if not lb:
+            flash('No teams to announce.', 'warning')
+            return redirect(url_for('admin_panel'))
+        leaderboard_url = request.url_root.rstrip('/') + url_for('leaderboard')
+        # Build top 5 lines
+        top = lb[:5]
+        lines = [f"{i+1}. {t.name} — {t.mmr} MMR" for i, t in enumerate(top)]
+        # Style using #1 team color & logo
+        top_team = lb[0]
+        color = _parse_hex_color(getattr(top_team, 'hexcolor', None), 0x5865F2)
+        thumbnail = getattr(top_team, 'logo', '')
+
+        embed = {
+            'title': f"Leaderboard - Week {mmr_system.current_week}",
+            'description': '\n'.join(lines) + f"\n\n[View Full Leaderboard]({leaderboard_url})",
+            'color': color,
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'footer': {'text': 'MMR System'}
+        }
+        if thumbnail:
+            embed['thumbnail'] = {'url': thumbnail}
+
+        _post_discord_embed(embed)
+        flash('Leaderboard webhook sent.', 'success')
+    except Exception as e:
+        logging.exception('Failed to send leaderboard webhook')
+        flash(f'Failed to send leaderboard webhook: {e}', 'error')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/update_branding/<team_name>', methods=['POST'])
+@admin_required
+def update_branding(team_name):
+    """Update a team's branding: hex color and logo URL."""
+    team = next((t for t in mmr_system.teams if t.name == team_name), None)
+    if not team:
+        flash('Team not found.', 'error')
+        return redirect(url_for('manage_teams'))
+
+    hex_in = (request.form.get('hexcolor') or '').strip()
+    logo_in = (request.form.get('logo') or '').strip()
+
+    # Normalize hex color to #RRGGBB
+    import re as _re
+    hex_out = '#374151'
+    if hex_in:
+        m = _re.fullmatch(r'#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})', hex_in)
+        if m:
+            h = m.group(1)
+            if len(h) == 3:
+                h = ''.join(ch * 2 for ch in h)
+            hex_out = '#' + h.lower()
+        else:
+            flash('Invalid hex color. Using default.', 'warning')
+    else:
+        hex_out = getattr(team, 'hexcolor', '#374151') or '#374151'
+
+    # Basic logo URL validation (optional)
+    if logo_in and not (logo_in.startswith('http://') or logo_in.startswith('https://')):
+        flash('Logo must be an http(s) URL.', 'error')
+        return redirect(url_for('manage_teams'))
+
+    team.hexcolor = hex_out
+    team.logo = logo_in
+    mmr_system.save_data()
+    flash('Branding updated.', 'success')
+    return redirect(url_for('manage_teams'))
 
 if __name__ == '__main__':
     # In production use gunicorn. This block is for local/dev usage.
