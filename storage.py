@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, JSON as SA_JSON, Text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, JSON as SA_JSON, Text, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.exc import OperationalError
 
@@ -67,6 +67,15 @@ class JsonStorage(BaseStorage):
 
 # -------------------- SQLite Backend --------------------
 Base = declarative_base()
+
+class MMRConfigModel(Base):
+    __tablename__ = 'mmr_config'
+    id = Column(Integer, primary_key=True)
+    k_factor = Column(Integer, default=K_FACTOR)
+    inactivity_penalty = Column(Integer, default=INACTIVITY_PENALTY)
+    point_diff_multiplier = Column(Float, default=POINT_DIFF_MULTIPLIER)
+    margin_bonus = Column(SA_JSON, default=lambda: MARGIN_BONUS)
+    elo_divisor = Column(Integer, default=ELO_DIVISOR)
 
 class TeamModel(Base):
     __tablename__ = 'teams'

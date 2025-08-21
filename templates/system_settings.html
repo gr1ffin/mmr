@@ -25,7 +25,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('update_system_settings') }}">
+                <form method="POST" action="{{ url_for('system_settings') }}">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -132,6 +132,28 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="elo_divisor" class="form-label">
+                                    <strong>Elo Divisor</strong>
+                                </label>
+                                <input type="number"
+                                       class="form-control"
+                                       id="elo_divisor"
+                                       name="elo_divisor"
+                                       value="{{ config.get('ELO_DIVISOR', 400) }}"
+                                       min="50"
+                                       max="1000"
+                                       required>
+                                <div class="form-text">Divisor for Elo probability calculation (lower = more sensitive)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            {# This column is intentionally left blank to balance the layout #}
+                        </div>
+                    </div>
+
                     <hr class="my-4">
 
                     <!-- Margin Bonuses -->
@@ -211,7 +233,8 @@
                     <strong>Placement Matches:</strong> {{ config['PLACEMENT_MATCHES'] }}<br>
                     <strong>Challenge Multiplier:</strong> {{ config['CHALLENGE_MULTIPLIER'] }}<br>
                     <strong>Inactivity Penalty:</strong> {{ config['INACTIVITY_PENALTY'] }}/week<br>
-                    <strong>Point Diff Multiplier:</strong> {{ config['POINT_DIFF_MULTIPLIER'] }}
+                    <strong>Point Diff Multiplier:</strong> {{ config['POINT_DIFF_MULTIPLIER'] }}<br>
+                    <strong>Elo Divisor:</strong> {{ config.get('ELO_DIVISOR', 400) }}
                 </div>
                 <div class="mb-3">
                     <strong>Margin Bonuses:</strong><br>
@@ -236,6 +259,13 @@
                     <li><strong>Medium (20-30):</strong> Balanced progression</li>
                     <li><strong>High (40+):</strong> Volatile ratings, fast changes</li>
                 </ul>
+
+                <h6>Elo Divisor:</h6>
+                <ul class="small">
+                    <li><strong>Standard (400):</strong> Classic Elo rating changes.</li>
+                    <li><strong>Aggressive (150-200):</strong> More sensitive to skill gaps.</li>
+                    <li>Lower values make MMR changes more pronounced between differently-rated teams.</li>
+                </ul>
                 
                 <h6>Margin Bonuses:</h6>
                 <ul class="small">
@@ -247,6 +277,17 @@
                 <div class="alert alert-warning mt-3">
                     <strong>Warning:</strong> Changing these settings affects all future MMR calculations.
                 </div>
+                <h5 class="card-title">Setting Explanations</h5>
+                <ul>
+                    <li><strong>Base MMR:</strong> The starting MMR for new players.</li>
+                    <li><strong>Placement Matches:</strong> The number of matches a player must complete before their MMR is publicly displayed.</li>
+                    <li><strong>K-Factor:</strong> A multiplier that determines the impact of a match result on a player's MMR. A higher K-Factor means more significant MMR swings.</li>
+                    <li><strong>Challenge Multiplier:</strong> A multiplier applied to MMR calculations when a lower-ranked team challenges and beats a higher-ranked team.</li>
+                    <li><strong>Inactivity Penalty:</strong> The amount of MMR deducted for prolonged inactivity. <em>(Note: The inactivity check must be run manually from the admin panel)</em></li>
+                    <li><strong>Point Difference Multiplier:</strong> A multiplier that adjusts MMR gains/losses based on the score difference in a match.</li>
+                    <li><strong>Elo Divisor:</strong> A value used in the Elo calculation to scale the expected score. A higher value narrows the expected win probability between teams.</li>
+                    <li><strong>Margin of Victory Bonus:</strong> Additional MMR awarded based on the match score (e.g., 3-0, 3-1). This rewards decisive victories.</li>
+                </ul>
             </div>
         </div>
     </div>

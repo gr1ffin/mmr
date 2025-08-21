@@ -227,7 +227,8 @@ else:
             "3_1": 3,
             "3_2": 1
         },
-        "POINT_DIFF_MULTIPLIER": 0.1
+        "POINT_DIFF_MULTIPLIER": 0.1,
+        "ELO_DIVISOR": 400
     }
 
 # Define global variables for MMR settings
@@ -238,6 +239,7 @@ CHALLENGE_MULTIPLIER = config["CHALLENGE_MULTIPLIER"]
 INACTIVITY_PENALTY = config["INACTIVITY_PENALTY"]
 MARGIN_BONUS = {tuple(map(int, k.replace(',', '_').split('_'))): v for k, v in config["MARGIN_BONUS"].items()}
 POINT_DIFF_MULTIPLIER = config["POINT_DIFF_MULTIPLIER"]
+ELO_DIVISOR = config.get("ELO_DIVISOR", 400)  # Use .get() with default value
 
 # After initializing MMRSystem, hydrate settings from DB so runtime reflects persisted config
 try:
@@ -250,6 +252,7 @@ try:
     CHALLENGE_MULTIPLIER = config["CHALLENGE_MULTIPLIER"]
     INACTIVITY_PENALTY = config["INACTIVITY_PENALTY"]
     POINT_DIFF_MULTIPLIER = config["POINT_DIFF_MULTIPLIER"]
+    ELO_DIVISOR = config.get("ELO_DIVISOR", 400)  # Add Elo Divisor
     MARGIN_BONUS = { (3,0): config["MARGIN_BONUS"].get("3_0", 5),
                      (3,1): config["MARGIN_BONUS"].get("3_1", 3),
                      (3,2): config["MARGIN_BONUS"].get("3_2", 1) }
@@ -259,6 +262,7 @@ try:
         inactivity_penalty=INACTIVITY_PENALTY,
         point_diff_multiplier=POINT_DIFF_MULTIPLIER,
         margin_bonus=MARGIN_BONUS,
+        elo_divisor=ELO_DIVISOR,  # Pass to system
     )
     mmr_system.placement_matches = PLACEMENT_MATCHES
 except Exception as e:
@@ -278,10 +282,14 @@ def admin_required(f):
 def index():
     leaderboard = mmr_system.get_leaderboard()
     current_week = mmr_system.current_week
-    recent_matches = sorted(mmr_system.matches, key=lambda x: x.week, reverse=True)[:10]
+    # Filter to only show completed matches for recent matches section
+    completed_matches = [m for m in mmr_system.matches if m.completed]
+    recent_matches = sorted(completed_matches, key=lambda x: x.week, reverse=True)[:10]
     week_matches = [m for m in mmr_system.matches if m.week == current_week - 1]
     # Pull full dashboard title from DB (empty string falls back in template)
     dashboard_title = mmr_system.get_setting('dashboard_header')
+    # Pass all teams (not just leaderboard) for logo lookup in templates
+    all_teams = mmr_system.teams
     return render_template(
         'index.html',
         teams=leaderboard,
@@ -291,6 +299,8 @@ def index():
         week_matches=week_matches,
         matches=mmr_system.matches,
         dashboard_title=dashboard_title,
+        # Pass all teams for logo lookup
+        all_teams=all_teams,
     )
 
 @app.route('/record_match', methods=['POST'])
@@ -680,20 +690,91 @@ def match_setup():
 @app.route('/system_settings', methods=['GET', 'POST'])
 @admin_required
 def system_settings():
-    """System MMR settings."""
     if request.method == 'POST':
         try:
-            new_k_factor = int(request.form.get('k_factor', K_FACTOR))
-            new_inactivity_penalty = int(request.form.get('inactivity_penalty', INACTIVITY_PENALTY))
-            # Update settings in the MMR system
-            mmr_system.update_settings(k_factor=new_k_factor, inactivity_penalty=new_inactivity_penalty)
-            flash("System settings updated successfully!", 'success')
-        except ValueError:
-            flash("Invalid input. Please enter valid numbers.", 'error')
-        return redirect(url_for('admin_panel'))
-    # Ensure template has access to full config including margin bonuses, pulling from DB
-    cfg = mmr_system.get_mmr_config()
-    return render_template('system_settings.html', config=cfg)
+            # Extract and validate all settings from the form
+            updated_config = {
+                "BASE_MMR": int(request.form['base_mmr']),
+                "PLACEMENT_MATCHES": int(request.form['placement_matches']),
+                "K_FACTOR": int(request.form['k_factor']),
+                "CHALLENGE_MULTIPLIER": float(request.form['challenge_multiplier']),
+                "INACTIVITY_PENALTY": int(request.form['inactivity_penalty']),
+                "POINT_DIFF_MULTIPLIER": float(request.form['point_diff_multiplier']),
+                "ELO_DIVISOR": int(request.form['elo_divisor']),
+                "MARGIN_BONUS": {
+                    "3_0": int(request.form['margin_3_0']),
+                    "3_1": int(request.form['margin_3_1']),
+                    "3_2": int(request.form['margin_3_2'])
+                }
+            }
+
+            # Persist the full configuration object using the correct method name
+            mmr_system.update_mmr_config_in_db(
+                base_mmr=updated_config["BASE_MMR"],
+                placement_matches=updated_config["PLACEMENT_MATCHES"],
+                k_factor=updated_config["K_FACTOR"],
+                challenge_multiplier=updated_config["CHALLENGE_MULTIPLIER"],
+                inactivity_penalty=updated_config["INACTIVITY_PENALTY"],
+                margin_bonus=updated_config["MARGIN_BONUS"],
+                point_diff_multiplier=updated_config["POINT_DIFF_MULTIPLIER"],
+                elo_divisor=updated_config["ELO_DIVISOR"]
+            )
+
+            # Apply settings to the running MMR system instance
+            margin_bonus_parsed = {
+                (3, 0): updated_config["MARGIN_BONUS"]["3_0"],
+                (3, 1): updated_config["MARGIN_BONUS"]["3_1"],
+                (3, 2): updated_config["MARGIN_BONUS"]["3_2"]
+            }
+            mmr_system.update_settings(
+                k_factor=updated_config["K_FACTOR"],
+                inactivity_penalty=updated_config["INACTIVITY_PENALTY"],
+                point_diff_multiplier=updated_config["POINT_DIFF_MULTIPLIER"],
+                margin_bonus=margin_bonus_parsed,
+                elo_divisor=updated_config["ELO_DIVISOR"]
+            )
+            mmr_system.placement_matches = updated_config["PLACEMENT_MATCHES"]
+            
+            # Also update the global variables for any part of the app that might still use them
+            global BASE_MMR, PLACEMENT_MATCHES, K_FACTOR, CHALLENGE_MULTIPLIER, \
+                   INACTIVITY_PENALTY, MARGIN_BONUS, POINT_DIFF_MULTIPLIER, ELO_DIVISOR, config
+            
+            config.update(updated_config)
+            BASE_MMR = updated_config["BASE_MMR"]
+            PLACEMENT_MATCHES = updated_config["PLACEMENT_MATCHES"]
+            K_FACTOR = updated_config["K_FACTOR"]
+            CHALLENGE_MULTIPLIER = updated_config["CHALLENGE_MULTIPLIER"]
+            INACTIVITY_PENALTY = updated_config["INACTIVITY_PENALTY"]
+            POINT_DIFF_MULTIPLIER = updated_config["POINT_DIFF_MULTIPLIER"]
+            ELO_DIVISOR = updated_config["ELO_DIVISOR"]
+            MARGIN_BONUS = margin_bonus_parsed
+
+            flash('System settings updated successfully!', 'success')
+            return redirect(url_for('system_settings'))
+        except Exception as e:
+            flash(f'Error updating settings: {e}', 'danger')
+
+    # For GET request, just render the page with the current config
+    # The config dictionary is already loaded globally, but let's re-fetch from DB to be safe
+    current_config = mmr_system.get_mmr_config() or {}
+    # Ensure all keys are present, falling back to the file/default config
+    final_config = config.copy()
+    final_config.update(current_config)
+    
+    # The MARGIN_BONUS in the config is string-keyed, but the template expects specific keys
+    # Let's make sure it's in the right format for the template.
+    if "MARGIN_BONUS" in final_config and isinstance(final_config["MARGIN_BONUS"], dict):
+        # Handle both '3_0' and '3-0' keys from different config sources
+        final_config["MARGIN_BONUS"] = {
+            "3_0": final_config["MARGIN_BONUS"].get("3_0", 5),
+            "3_1": final_config["MARGIN_BONUS"].get("3_1", 3),
+            "3_2": final_config["MARGIN_BONUS"].get("3_2", 1),
+        }
+    else: # fallback
+        final_config["MARGIN_BONUS"] = {"3_0": 5, "3_1": 3, "3_2": 1}
+
+    return render_template('system_settings.html', config=final_config)
+
 
 @app.route('/backup_data')
 @admin_required

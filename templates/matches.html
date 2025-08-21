@@ -26,14 +26,15 @@
                             {% set team_b_obj = teams | selectattr('name', 'equalto', match.team_b) | first %}
                             {% set winner = team_a_obj if (match.completed and match.score and match.score[0] > match.score[1]) else (team_b_obj if (match.completed and match.score and match.score[1] > match.score[0]) else none) %}
                             <div class="col-md-6 col-lg-4 mb-3">
+                                {% set match_status = match.get_status() %}
+                                {% set status_color = '#28a745' if match_status == 'completed' else ('#ffc107' if match_status == 'scheduled' else '#dc3545') %}
                                 <div class="card match-card {{ 'match-completed' if match.completed else 'match-pending' }}" 
-                                     {% if winner %}style="border-left: 4px solid {{ winner.hexcolor or '#6366f1' }};"{% endif %}>
+                                     style="border-left: 4px solid {{ status_color }};">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <small class="text-muted">
                                                 <code>{{ match.match_id[:8] }}</code>
                                             </small>
-                                            {% set match_status = match.get_status() %}
                                             <span class="badge bg-{{ 'success' if match_status == 'completed' else ('warning' if match_status == 'scheduled' else 'danger') }}">
                                                 {{ 'Completed' if match_status == 'completed' else ('Scheduled' if match_status == 'scheduled' else 'Unscheduled') }}
                                             </span>

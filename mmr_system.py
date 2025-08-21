@@ -21,6 +21,7 @@ CHALLENGE_MULTIPLIER = 0.5
 INACTIVITY_PENALTY = 10
 MARGIN_BONUS = {(3, 0): 5, (3, 1): 3, (3, 2): 1}
 POINT_DIFF_MULTIPLIER = 0.1
+ELO_DIVISOR = 200  # Default ELO divisor for probability calculation
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEAMS_PATH = os.path.join(BASE_DIR, 'teams.json')
@@ -103,6 +104,7 @@ class MMRConfigModel(Base):
     inactivity_penalty = Column(Integer, default=INACTIVITY_PENALTY)
     margin_bonus = Column(JSON, default={"3_0": 5, "3_1": 3, "3_2": 1})
     point_diff_multiplier = Column(Float, default=POINT_DIFF_MULTIPLIER)
+    elo_divisor = Column(Integer, default=ELO_DIVISOR)
     updated_at = Column(String, default=lambda: datetime.utcnow().isoformat())
     __table_args__ = (
         Index('ix_mmr_config_singleton', 'id'),
@@ -222,6 +224,7 @@ class MMRSystem:
         self.margin_bonus = MARGIN_BONUS.copy()
         self.inactivity_penalty = INACTIVITY_PENALTY
         self.placement_matches = PLACEMENT_MATCHES  # Teams are provisional until they play this many matches
+        self.elo_divisor = ELO_DIVISOR  # More aggressive divisor
         # DB
         self.engine = create_engine(
             DB_URL,
@@ -380,6 +383,7 @@ class MMRSystem:
                     "INACTIVITY_PENALTY": INACTIVITY_PENALTY,
                     "MARGIN_BONUS": {"3_0": 5, "3_1": 3, "3_2": 1},
                     "POINT_DIFF_MULTIPLIER": POINT_DIFF_MULTIPLIER,
+                    "ELO_DIVISOR": ELO_DIVISOR,
                 }
             with self.SessionLocal() as db:
                 row = db.query(MMRConfigModel).order_by(MMRConfigModel.id.asc()).first()
@@ -404,12 +408,58 @@ class MMRSystem:
                     row.point_diff_multiplier = float(cfg.get('POINT_DIFF_MULTIPLIER', POINT_DIFF_MULTIPLIER) or POINT_DIFF_MULTIPLIER)
                 except Exception:
                     row.point_diff_multiplier = POINT_DIFF_MULTIPLIER
+                row.elo_divisor = int(cfg.get('ELO_DIVISOR', ELO_DIVISOR) or ELO_DIVISOR)
                 row.updated_at = datetime.utcnow().isoformat()
                 db.commit()
         except Exception as e:
             logging.warning(f"Failed to sync mmr_config from JSON: {e}")
 
+    def calculate_mmr_change(self, team_a_mmr, team_b_mmr, result, is_challenge=False, point_diff=0):
+        # Expected win probability
+        prob_a = 1 / (1 + 10 ** ((team_b_mmr - team_a_mmr) / self.elo_divisor))
+        prob_b = 1 - prob_a
+
+        # Base MMR change
+        if result == 'win':
+            base_change = self.k_factor * (1 - prob_a)
+        else:
+            base_change = self.k_factor * (0 - prob_a)
+
+        # Challenge multiplier
+        if is_challenge:
+            base_change *= self.challenge_multiplier
+
+        # Point differential bonus/penalty
+        point_bonus = point_diff * self.point_diff_multiplier
+        
+        return int(round(base_change + point_bonus))
+
+    def load_config(self):
+        """Load MMR calculation parameters from the database."""
+        if not self.has_database:
+            return
+        try:
+            with self.SessionLocal() as db:
+                config = db.query(MMRConfigModel).order_by(MMRConfigModel.id.asc()).first()
+                if config:
+                    self.base_mmr = config.base_mmr
+                    self.placement_matches = config.placement_matches
+                    self.k_factor = config.k_factor
+                    self.challenge_multiplier = config.challenge_multiplier
+                    self.inactivity_penalty = config.inactivity_penalty
+                    # Handle both dicts with string keys (from JSON) and tuple keys
+                    self.margin_bonus = {
+                        (int(k.split('_')[0]), int(k.split('_')[1])): v
+                        for k, v in config.margin_bonus.items()
+                    }
+                    self.point_diff_multiplier = config.point_diff_multiplier
+                    self.elo_divisor = config.elo_divisor
+                    logging.info(f"Loaded config from DB: ELO_DIVISOR={self.elo_divisor}")
+        except Exception as e:
+            logging.warning(f"Could not load config from DB, using defaults: {e}")
+
     def load_data(self):
+        self.load_config()  # Load config first
         self.teams = self._load_teams()
         self.matches = self._load_matches()
         if self.matches:
@@ -423,6 +473,28 @@ class MMRSystem:
     def save_data(self):
         self._save_teams()
         self._save_matches()
+
+    def save_config(self):
+        """Save the current MMR parameters to the database."""
+        if not self.has_database:
+            return
+        try:
+            with self.SessionLocal() as db:
+                config = db.query(MMRConfigModel).order_by(MMRConfigModel.id.asc()).first()
+                if not config:
+                    config = MMRConfigModel()
+                    db.add(config)
+                
+                config.k_factor = self.k_factor
+                config.inactivity_penalty = self.inactivity_penalty
+                config.point_diff_multiplier = self.point_diff_multiplier
+                config.margin_bonus = {f"{k[0]}_{k[1]}": v for k, v in self.margin_bonus.items()}
+                config.elo_divisor = self.elo_divisor
+                
+                db.commit()
+                logging.info("Saved config to DB.")
+        except Exception as e:
+            logging.warning(f"Could not save config to DB: {e}")
 
     def _load_teams(self) -> List[Team]:
         teams: List[Team] = []
@@ -553,7 +625,7 @@ class MMRSystem:
         self.save_data()
         return True
 
-    def update_settings(self, k_factor: Optional[int] = None, inactivity_penalty: Optional[int] = None, point_diff_multiplier: Optional[float] = None, margin_bonus: Optional[Dict[Tuple[int,int], int]] = None):
+    def update_settings(self, k_factor: Optional[int] = None, inactivity_penalty: Optional[int] = None, point_diff_multiplier: Optional[float] = None, margin_bonus: Optional[Dict[Tuple[int,int], int]] = None, elo_divisor: Optional[int] = None):
         if k_factor is not None:
             self.k_factor = int(k_factor)
         if inactivity_penalty is not None:
@@ -562,25 +634,28 @@ class MMRSystem:
             self.point_diff_multiplier = float(point_diff_multiplier)
         if margin_bonus is not None:
             self.margin_bonus = dict(margin_bonus)
-        logging.info(f"Settings updated: K={self.k_factor}, INACTIVITY={self.inactivity_penalty}, POINT_MULT={self.point_diff_multiplier}, MARGIN_BONUS={self.margin_bonus}")
+        if elo_divisor is not None:
+            self.elo_divisor = int(elo_divisor)
+        logging.info(f"Settings updated: K={self.k_factor}, INACTIVITY={self.inactivity_penalty}, POINT_MULT={self.point_diff_multiplier}, MARGIN_BONUS={self.margin_bonus}, ELO_DIVISOR={self.elo_divisor}")
+        self.save_config()
 
     def update_mmr(self, winner: Team, loser: Team, score: Tuple[int, int], set_scores: Optional[List[str]] = None, points_winner: Optional[int] = None, points_loser: Optional[int] = None, record_history: bool = True) -> Tuple[int, int]:
         """
-        Non-zero-sum MMR system where both teams can gain MMR in close matches.
-        Returns (winner_gain, loser_change) where loser_change can be negative or positive.
+        Zero-sum MMR system based on Elo.
+        The winner gains what the loser loses.
+        Returns (winner_gain, loser_loss) where loser_loss is always negative.
         """
         # Calculate expected win probability for the winner
-        expected_winner = 1 / (1 + 10 ** ((loser.mmr - winner.mmr) / 400))
+        expected_winner = 1 / (1 + 10 ** ((loser.mmr - winner.mmr) / self.elo_divisor))
         
-        # Base MMR calculations
-        winner_base_gain = self.k_factor * (1 - expected_winner)
-        loser_base_change = self.k_factor * (0 - expected_winner)  # Usually negative
+        # Base MMR calculation (Elo)
+        base_gain = self.k_factor * (1 - expected_winner)
         
         # Set margin bonuses
         winner_sets = max(score)
         loser_sets = min(score)
-        set_bonus = self.margin_bonus.get((winner_sets, loser_sets), 0)
-        
+        set_bonus = self.margin_bonus.get(f"{winner_sets}_{loser_sets}", self.margin_bonus.get((winner_sets, loser_sets), 0))
+
         # Point differential calculations
         if points_winner is None or points_loser is None:
             if set_scores:
@@ -596,22 +671,16 @@ class MMRSystem:
         point_diff_capped = min(point_diff, 75)
         point_factor = self.point_diff_multiplier * point_diff_capped
         
-        # Final MMR changes with non-zero-sum adjustments
-        winner_gain = int(round(winner_base_gain + point_factor + set_bonus))
+        # Final MMR changes
+        winner_gain = int(round(base_gain + point_factor + set_bonus))
         winner_gain = max(1, winner_gain)  # Winner always gains at least 1
         
-        # Loser change calculation - less harsh in close matches
-        closeness_factor = 1 - abs(expected_winner - 0.5) * 2  # 0 to 1, higher for closer matches
-        loser_change = int(round(loser_base_change * (0.6 + 0.4 * closeness_factor) - point_factor * 0.5))
-        
-        # In very close matches (within 15 MMR), loser might gain small amount
-        mmr_diff = abs(winner.mmr - loser.mmr)
-        if mmr_diff <= 15 and winner_sets - loser_sets <= 1:  # Close MMR and close score
-            loser_change = max(loser_change, int(winner_gain * 0.2))  # Loser gains 20% of winner's gain
-        
+        # Loser's loss is the exact negative of the winner's gain for a zero-sum system
+        loser_loss = -winner_gain
+
         # Apply MMR changes
         winner.mmr = max(0, winner.mmr + winner_gain)
-        loser.mmr = max(0, loser.mmr + loser_change)
+        loser.mmr = max(0, loser.mmr + loser_loss)
         
         # Update match statistics
         winner.wins += 1
@@ -628,11 +697,11 @@ class MMRSystem:
         # Record history
         if record_history:
             winner_change_str = f"+{winner_gain}"
-            loser_change_str = f"+{loser_change}" if loser_change >= 0 else str(loser_change)
+            loser_change_str = str(loser_loss)
             winner.history.append(f"Won {winner_sets}-{loser_sets} vs {loser.name} ({winner_change_str} MMR, +{point_diff} pts)")
             loser.history.append(f"Lost {loser_sets}-{winner_sets} vs {winner.name} ({loser_change_str} MMR, -{point_diff} pts)")
             
-        return winner_gain, loser_change
+        return winner_gain, loser_loss
 
     def record_match(self, team_a_name: str, team_b_name: str, score: Tuple[int, int], set_scores: Optional[List[str]] = None):
         team_a = next((t for t in self.teams if t.name == team_a_name), None)
@@ -673,8 +742,9 @@ class MMRSystem:
         self.save_data()
 
     def get_leaderboard(self) -> List[Team]:
-        placed = [t for t in self.teams if t.matches_played >= self.placement_matches]
-        return sorted(placed, key=lambda t: t.mmr, reverse=True) if placed else []
+        # Return all active teams sorted by MMR, regardless of matches played
+        active_teams = [t for t in self.teams if t.active]
+        return sorted(active_teams, key=lambda t: t.mmr, reverse=True) if active_teams else []
 
     def recalculate_all_mmr(self):
         for t in self.teams:
@@ -816,7 +886,7 @@ class MMRSystem:
         mmr_values = [t.mmr for t in teams]
         mmr_range = max(mmr_values) - min(mmr_values) if mmr_values else 0
         
-        if mmr_range <= 100 and n >= 4:
+        if (mmr_range <= 100 and n >= 4):
             # Use snake draft style pairing for even distribution
             return self._generate_snake_draft_matches(teams, matches_per_team, forbidden_pairs, target_pairs)
         else:
@@ -1072,6 +1142,7 @@ class MMRSystem:
             "INACTIVITY_PENALTY": INACTIVITY_PENALTY,
             "MARGIN_BONUS": {"3_0": 5, "3_1": 3, "3_2": 1},
             "POINT_DIFF_MULTIPLIER": POINT_DIFF_MULTIPLIER,
+            "ELO_DIVISOR": ELO_DIVISOR,
         }
         if not self.has_database:
             return cfg
@@ -1091,6 +1162,7 @@ class MMRSystem:
                     "INACTIVITY_PENALTY": int(row.inactivity_penalty),
                     "MARGIN_BONUS": mb_norm,
                     "POINT_DIFF_MULTIPLIER": float(row.point_diff_multiplier),
+                    "ELO_DIVISOR": int(row.elo_divisor),
                 }
         except Exception as e:
             logging.warning(f"Failed to read MMR config from DB: {e}")
@@ -1103,7 +1175,8 @@ class MMRSystem:
                                 challenge_multiplier: float,
                                 inactivity_penalty: int,
                                 margin_bonus: Dict[str, int],
-                                point_diff_multiplier: float) -> None:
+                                point_diff_multiplier: float,
+                                elo_divisor: int) -> None:
         """Upsert the mmr_config row in DB with provided values."""
         if not self.has_database:
             return
@@ -1127,6 +1200,7 @@ class MMRSystem:
                     row.point_diff_multiplier = float(point_diff_multiplier)
                 except Exception:
                     row.point_diff_multiplier = POINT_DIFF_MULTIPLIER
+                row.elo_divisor = int(elo_divisor)
                 row.updated_at = datetime.utcnow().isoformat()
                 db.commit()
         except Exception as e:

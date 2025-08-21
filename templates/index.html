@@ -103,8 +103,8 @@
                 {% if recent_matches %}
                 <div class="row">
                     {% for match in recent_matches %}
-                    {% set team_a_obj = teams | selectattr('name', 'equalto', match.team_a) | first %}
-                    {% set team_b_obj = teams | selectattr('name', 'equalto', match.team_b) | first %}
+                    {% set team_a_obj = all_teams | selectattr('name', 'equalto', match.team_a) | first %}
+                    {% set team_b_obj = all_teams | selectattr('name', 'equalto', match.team_b) | first %}
                     {% set winner = team_a_obj if (match.completed and match.score and match.score[0] > match.score[1]) else (team_b_obj if (match.completed and match.score and match.score[1] > match.score[0]) else none) %}
                     <div class="col-md-6 col-lg-4 mb-3">
                         <div class="card match-card {{ 'match-completed' if match.completed else 'match-pending' }}" 
